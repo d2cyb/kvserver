@@ -1,0 +1,52 @@
+---
+Language: Cpp
+BasedOnStyle: WebKit
+
+# c++ standard
+Standard: c++20
+
+# spaces indent count
+TabWidth: 4
+IndentWidth: 4
+UseTab: Always
+AlignConsecutiveAssignments: Consecutive
+
+# Line width
+ColumnLimit: 100
+
+# includes sorting
+SortIncludes: true
+
+# empty lines at the start of blocks
+KeepEmptyLinesAtTheStartOfBlocks: true
+
+# space after template <
+SpaceAfterTemplateKeyword: false
+
+# allow single line function
+AllowShortFunctionsOnASingleLine: Empty
+
+# *a
+PointerAlignment: Right
+
+# align arguments after open bracket
+AlignAfterOpenBracket: BlockIndent
+
+# number of columns to use to indent the contents of braced init lists
+BracedInitializerIndentWidth: 2
+
+# move parameters to next line
+AllowAllParametersOfDeclarationOnNextLine: false
+
+# arguments to next line
+BinPackArguments: false
+
+# parameters to next line
+BinPackParameters: false
+
+# ternary operator
+BreakBeforeTernaryOperators: true
+
+# format braced lists as best suited for C++11 braced lists
+Cpp11BracedListStyle: false
+...
