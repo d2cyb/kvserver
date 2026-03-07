@@ -1,4 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
+
 #include <filesystem>
 #include <fstream>
 #include <thread>
@@ -13,8 +14,6 @@ TEST_CASE("Config basic operations", "[config]")
 {
 	const std::string testFilePath = "test_config.txt";
 
-	std::filesystem::remove(testFilePath);
-
 	SECTION("must create empty config file, if not exists")
 	{
 		REQUIRE(std::filesystem::exists(testFilePath) == false);
@@ -22,7 +21,7 @@ TEST_CASE("Config basic operations", "[config]")
 		Config config(testFilePath);
 
 		REQUIRE(std::filesystem::exists(testFilePath));
-		REQUIRE(config.get("nonexistent").empty());
+		REQUIRE(config.get("nonexistent").has_value() == false);
 	}
 
 	SECTION("get must return values, if values set")
@@ -34,7 +33,7 @@ TEST_CASE("Config basic operations", "[config]")
 
 		REQUIRE(config.get("key1") == "value1");
 		REQUIRE(config.get("key2") == "value2");
-		REQUIRE(config.get("key3").empty());
+		REQUIRE(config.get("key3").has_value() == false);
 	}
 
 	SECTION("must update value")
@@ -78,11 +77,10 @@ TEST_CASE("Config basic operations", "[config]")
 	std::filesystem::remove(testFilePath);
 }
 
+// TODO (move to different class)
 TEST_CASE("read and write statistic", "[config][statistic]")
 {
 	const std::string testFilePath = "test_config_statistic.txt";
-
-	std::filesystem::remove(testFilePath);
 
 	SECTION("must empty statistics, for new config")
 	{
@@ -133,7 +131,6 @@ TEST_CASE("read and write statistic", "[config][statistic]")
 TEST_CASE("Config thread safety", "[config][thread]")
 {
 	const std::string testFilePath = "test_config_thread.txt";
-	std::filesystem::remove(testFilePath);
 
 	Config config(testFilePath);
 
@@ -158,7 +155,7 @@ TEST_CASE("Config thread safety", "[config][thread]")
 					std::string key { "key" + std::to_string(readIdx) };
 					std::string expected { "value" + std::to_string(readIdx) };
 
-					if (config.get(key) == expected) {
+					if (config.get(key).value_or("") == expected) {
 						successfulReads++;
 					}
 				}

@@ -19,27 +19,15 @@ if(POLICY CMP0167)
 endif()
 
 find_package(Boost COMPONENTS thread json)
+find_package(${LIBRARY_NAME} PATHS ${CMAKE_BINARY_DIR})
 
 file(GLOB_RECURSE KVSERVER_SOURCE_FILES
     ${PROJECT_SOURCE_DIR}/src/server.cpp
     ${PROJECT_SOURCE_DIR}/src/session.cpp
     ${PROJECT_SOURCE_DIR}/src/config.cpp
     ${PROJECT_SOURCE_DIR}/src/statistic.cpp
-    ${PROJECT_SOURCE_DIR}/src/thread_pool.cpp
+    ${PROJECT_SOURCE_DIR}/src/utilities.cpp
 )
-
-add_executable(${APP_EXECUTABLE_NAME}
-    ${PROJECT_SOURCE_DIR}/src/main.cpp
-)
-set_target_properties(
-    ${APP_EXECUTABLE_NAME}
-    PROPERTIES
-    CXX_STANDARD 20
-    CXX_STANDARD_REQUIRED ON
-    CXX_EXTENSIONS OFF
-    THREADS_PREFER_PTHREAD_FLAG ON
-)
-target_compile_features(${APP_EXECUTABLE_NAME} PUBLIC cxx_std_20)
 
 add_library(${LIBRARY_NAME})
 target_sources(${LIBRARY_NAME}
@@ -67,18 +55,37 @@ target_sources(${LIBRARY_NAME}
             ${CMAKE_CURRENT_BINARY_DIR}/kvserver_lib_export.h
 )
 
-target_include_directories(${LIBRARY_NAME}
-    PRIVATE "${CMAKE_BINARY_DIR}"
+target_include_directories(${LIBRARY_NAME} PRIVATE
+    "${CMAKE_BINARY_DIR}"
 )
 
-target_link_libraries(${LIBRARY_NAME} PRIVATE
+target_link_libraries(${LIBRARY_NAME} PUBLIC
     Boost::thread
     Boost::json
     pthread
 )
 
-target_include_directories(${LIBRARY_NAME}
-    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
+target_include_directories(${LIBRARY_NAME} PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+add_executable(${APP_EXECUTABLE_NAME}
+    ${PROJECT_SOURCE_DIR}/src/main.cpp
+)
+set_target_properties(
+    ${APP_EXECUTABLE_NAME}
+    PROPERTIES
+    CMAKE_CXX_EXTENSIONS OFF
+    CMAKE_CXX_VISIBILITY_PRESET hidden
+    CMAKE_VISIBILITY_INLINES_HIDDEN ON
+    CXX_STANDARD 20
+)
+target_compile_features(${APP_EXECUTABLE_NAME} PUBLIC cxx_std_20)
+target_link_libraries(${APP_EXECUTABLE_NAME} PRIVATE
+    ${LIBRARY_NAME}
+)
+target_include_directories(${APP_EXECUTABLE_NAME} PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
 set_target_properties(${LIBRARY_NAME} PROPERTIES VERSION ${PROJECT_VERSION})

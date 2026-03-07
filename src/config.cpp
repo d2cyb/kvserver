@@ -24,8 +24,10 @@ class Config {
 private:
 	std::string configFilePath;
 	std::unordered_map<std::string, std::string> configData;
+	// TODO (move to different statistics class)
 	std::unordered_map<std::string, ConfigKeyStats> keyStatus;
 
+	// Replace to different locks: shared_timed_mutex, std::scoped_lock
 	mutable std::mutex dataMutex;
 	mutable std::mutex fileMutex;
 	mutable std::mutex statusMutex;
@@ -61,7 +63,7 @@ public:
 	Config(Config &&)						   = delete;
 	auto operator=(Config &&) -> Config &	   = delete;
 
-	auto get(const std::string &key) -> std::string
+	auto get(const std::string &key) -> std::optional<std::string>
 	{
 		std::scoped_lock sl(dataMutex, statusMutex);
 		auto it = configData.find(key);
@@ -70,7 +72,7 @@ public:
 			return it->second;
 		}
 
-		return "";
+		return {};
 	}
 
 	void set(const std::string &key, const std::string &value)

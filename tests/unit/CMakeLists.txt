@@ -5,7 +5,7 @@ project(
 )
 set(EXECUTABLE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
-message(STATUS "Unit Tests enabled")
+message(STATUS "Unit tests enabled")
 
 set(UNIT_TESTS_PROJECT_NAME ${PROJECT_NAME})
 
@@ -16,6 +16,8 @@ file(
     GLOB_RECURSE
     UNIT_TEST_FILES
     ${PROJECT_SOURCE_DIR}/src/config.test.cpp
+    ${PROJECT_SOURCE_DIR}/src/server.test.cpp
+    ${PROJECT_SOURCE_DIR}/src/utilities.test.cpp
 )
 
 add_executable(${UNIT_TESTS_PROJECT_NAME})
