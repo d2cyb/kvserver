@@ -1,13 +1,16 @@
 #include <exception>
+#include <filesystem>
 #include <iostream>
 #include <memory>
 #include <stdexcept>
+#include <tuple>
 
 import kvserver.server;
 import kvserver.config;
 
 using kvserver::Config;
 using kvserver::Server;
+namespace fs = std::filesystem;
 
 std::shared_ptr<Config> config;
 std::shared_ptr<Server> server;
@@ -19,13 +22,10 @@ void printUsageMessage(const std::string_view &appName)
 			  << "Default config: config.txt" << std::endl;
 }
 
-void parseArguments() { }
-
-auto main(int argc, char *argv[]) -> int
+auto parseArguments(int argc, char *argv[]) -> std::tuple<int, std::string>
 {
 	std::string configFilePath = "config.txt";
 	int port { 8080 };
-	std::string_view appName { argv[0] };
 
 	if (argc > 1) {
 		try {
@@ -35,21 +35,34 @@ auto main(int argc, char *argv[]) -> int
 			}
 			if (argc > 2) {
 				configFilePath = argv[2];
+				if (fs::exists(configFilePath) && not fs::is_regular_file(configFilePath)) {
+					throw std::runtime_error("Config is not regular file");
+				}
 			}
 		} catch (const std::invalid_argument &err) {
-			std::cerr << "Invalid argument" << std::endl;
-			printUsageMessage(appName);
-			return 1;
+			throw std::runtime_error(std::string { "Invalid argument: " } + err.what());
 		} catch (const std::out_of_range &err) {
-			std::cerr << "Argument value out of range" << std::endl;
-			printUsageMessage(appName);
-			return 1;
+			throw std::runtime_error(std::string { "Argument value out of range: " } + err.what());
 		} catch (const std::exception &err) {
-			std::cerr << err.what() << std::endl;
-			printUsageMessage(appName);
-			return 1;
+			throw std::runtime_error(std::string { "Error prase arguments: " } + err.what());
 		}
 	}
+	return { port, configFilePath };
+}
+
+auto main(int argc, char *argv[]) -> int
+{
+	std::string_view appName { argv[0] };
+
+	std::tuple<int, std::string> arguments;
+	try {
+		arguments = parseArguments(argc, argv);
+	} catch (const std::exception &err) {
+		printUsageMessage(appName);
+		std::cerr << err.what() << std::endl;
+		return 1;
+	}
+	auto [port, configFilePath] = arguments;
 
 	std::cout << "Started key value server\n"
 			  << "Server port: " << port << "\n"
