@@ -8,6 +8,7 @@ module;
 #include <mutex>
 #include <queue>
 #include <string>
+#include <syncstream>
 #include <thread>
 #include <utility>
 
@@ -103,7 +104,8 @@ private:
 	void loadConfig()
 	{
 		if (!std::filesystem::exists(configFilePath)) {
-			std::cerr << "Config file not found, creating new one: " << configFilePath << '\n';
+			std::osyncstream(std::cerr)
+				<< "Config file not found, creating new one: " << configFilePath << '\n';
 
 			saveConfig();
 			return;
@@ -125,7 +127,8 @@ private:
 			boost::json::value jsonDocument = boost::json::parse(content);
 
 			if (!jsonDocument.is_object()) {
-				std::cerr << "Config file is not a valid JSON object: " << configFilePath << '\n';
+				std::osyncstream(std::cerr)
+					<< "Config file is not a valid JSON object: " << configFilePath << '\n';
 				return;
 			}
 
@@ -138,7 +141,8 @@ private:
 				}
 			}
 		} catch (const std::exception &e) {
-			std::cerr << "Error parsing config file " << configFilePath << ". " << e.what() << '\n';
+			std::osyncstream(std::cerr)
+				<< "Error parsing config file " << configFilePath << ". " << e.what() << '\n';
 		}
 	}
 
@@ -158,7 +162,8 @@ private:
 
 			std::ofstream file(configFilePath);
 			if (!file.is_open()) {
-				std::cerr << "Error opening config file for writing. " << configFilePath << '\n';
+				std::osyncstream(std::cerr)
+					<< "Error opening config file for writing. " << configFilePath << '\n';
 				return;
 			}
 
@@ -167,7 +172,8 @@ private:
 
 			isNeedSave = false;
 		} catch (const std::exception &e) {
-			std::cerr << "Error saving config to " << configFilePath << ". " << e.what() << '\n';
+			std::osyncstream(std::cerr)
+				<< "Error saving config to " << configFilePath << ". " << e.what() << '\n';
 		}
 	}
 

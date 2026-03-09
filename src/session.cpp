@@ -8,6 +8,7 @@ module;
 #include <boost/asio/streambuf.hpp>
 #include <boost/asio/write.hpp>
 #include <iostream>
+#include <syncstream>
 
 export module kvserver.session;
 
@@ -94,7 +95,6 @@ private:
 			config->set(commandSet->key, commandSet->value);
 		} else if (const auto w { get_if<CommandUndefined>(&command) }; w) {
 			// TODO (write to journal)
-			// std::cerr << "Server: received undefined command: " << requestString << '\n';
 		}
 		return response;
 	}
@@ -120,11 +120,13 @@ private:
 				if (err.code() == boost::asio::error::eof) {
 					// Remote peer closed connection
 				} else {
-					std::cerr << "Server error: wait for request: " << err.what() << '\n';
+					std::osyncstream(std::cerr)
+						<< "Server error: wait for request: " << err.what() << '\n';
 				}
 				break;
 			} catch (std::exception &err) {
-				std::cerr << "Server exception: wait for request: " << err.what() << '\n';
+				std::osyncstream(std::cerr)
+					<< "Server exception: wait for request: " << err.what() << '\n';
 				break;
 			}
 		}

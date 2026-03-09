@@ -8,6 +8,7 @@ module;
 #include <shared_mutex>
 #include <stop_token>
 #include <string>
+#include <syncstream>
 #include <thread>
 
 export module kvserver.statistic;
@@ -81,11 +82,12 @@ private:
 					recentCommandsMutex
 				);
 
-				std::cout << "\n=== Statistic at "
-						  << std::put_time(std::localtime(&timePoint), "%H:%M:%S") << " ===\n"
-						  << "Total commands : " << totalCommands.load() << "\n"
-						  << "Commands in last " << intervalSeconds
-						  << " seconds: " << recentCommands.load() << '\n';
+				std::osyncstream(std::cout)
+					<< "\n=== Statistic at "
+					<< std::put_time(std::localtime(&timePoint), "%H:%M:%S") << " ===\n"
+					<< "Total commands : " << totalCommands.load() << "\n"
+					<< "Commands in last " << intervalSeconds
+					<< " seconds: " << recentCommands.load() << '\n';
 
 				recentCommands = 0;
 			}

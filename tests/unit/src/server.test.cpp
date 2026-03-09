@@ -69,23 +69,23 @@ TEST_CASE("server", "[server]")
 
 	std::filesystem::remove(testFilePath);
 
+	std::latch serverReady { 1 };
+	std::jthread serverThread([portNum, &testFilePath, &serverReady]() -> void {
+		auto config = std::make_shared<Config>(testFilePath);
+		config->set("key1", "value 2");
+
+		auto statistic = std::make_shared<Statistic>();
+
+		server = std::make_shared<Server>(portNum, config, statistic);
+
+		auto startServerCallBack = [&serverReady]() -> void { serverReady.count_down(); };
+		server->pushTask(startServerCallBack);
+
+		server->start();
+	});
+
 	SECTION("procession commands")
 	{
-		std::latch serverReady { 1 };
-		std::jthread serverThread([portNum, &testFilePath, &serverReady]() -> void {
-			auto config = std::make_shared<Config>(testFilePath);
-			config->set("key1", "value 2");
-
-			auto statistic = std::make_shared<Statistic>();
-
-			server = std::make_shared<Server>(portNum, config, statistic);
-
-			auto startServerCallBack = [&serverReady]() -> void { serverReady.count_down(); };
-			server->pushTask(startServerCallBack);
-
-			server->start();
-		});
-
 		serverReady.wait();
 
 		// should return value on get commands
@@ -99,63 +99,29 @@ TEST_CASE("server", "[server]")
 		// should return empty string on wrong commands
 		auto resultUndefinedCommand = sendCommand("localhost", portNum, "wrong command");
 		REQUIRE(resultUndefinedCommand == "(empty)");
-
-		server->stop();
 	}
 
 	SECTION("must receive message less 4049 chars")
 	{
-		std::latch serverReady { 1 };
-		std::jthread serverThread([portNum, &testFilePath, &serverReady]() -> void {
-			auto config = std::make_shared<Config>(testFilePath);
-			config->set("key1", "value 2");
-
-			auto statistic = std::make_shared<Statistic>();
-
-			server = std::make_shared<Server>(portNum, config, statistic);
-
-			auto startServerCallBack = [&serverReady]() -> void { serverReady.count_down(); };
-			server->pushTask(startServerCallBack);
-
-			server->start();
-		});
-
 		serverReady.wait();
 
 		std::string tooLargeMessage(4095, 'A');
 		auto resultGet = sendCommand("localhost", portNum, tooLargeMessage);
 
 		REQUIRE(resultGet == "(empty)");
-
-		server->stop();
 	}
 
 	SECTION("must close connection if message too large")
 	{
-		std::latch serverReady { 1 };
-		std::jthread serverThread([portNum, &testFilePath, &serverReady]() -> void {
-			auto config = std::make_shared<Config>(testFilePath);
-			config->set("key1", "value 2");
-
-			auto statistic = std::make_shared<Statistic>();
-
-			server = std::make_shared<Server>(portNum, config, statistic);
-
-			auto startServerCallBack = [&serverReady]() -> void { serverReady.count_down(); };
-			server->pushTask(startServerCallBack);
-
-			server->start();
-		});
-
 		serverReady.wait();
 
 		std::string tooLargeMessage(4096, 'A');
 		auto resultGet = sendCommand("localhost", portNum, tooLargeMessage);
 
 		REQUIRE(resultGet == "connection closed");
-
-		server->stop();
 	}
+
+	server->stop();
 
 	std::filesystem::remove(testFilePath);
 }
@@ -167,22 +133,22 @@ TEST_CASE("server parallel", "[server]")
 
 	std::filesystem::remove(testFilePath);
 
+	std::latch serverReady { 1 };
+	std::jthread serverThread([portNum, &testFilePath, &serverReady]() -> void {
+		auto config = std::make_shared<Config>(testFilePath);
+		config->set("key1", "value 2");
+
+		auto statistic = std::make_shared<Statistic>();
+		server		   = std::make_shared<Server>(portNum, config, statistic);
+
+		auto startServerCallBack = [&serverReady]() -> void { serverReady.count_down(); };
+		server->pushTask(startServerCallBack);
+
+		server->start();
+	});
+
 	SECTION("procession commands")
 	{
-		std::latch serverReady { 1 };
-		std::jthread serverThread([portNum, &testFilePath, &serverReady]() -> void {
-			auto config = std::make_shared<Config>(testFilePath);
-			config->set("key1", "value 2");
-
-			auto statistic = std::make_shared<Statistic>();
-			server		   = std::make_shared<Server>(portNum, config, statistic);
-
-			auto startServerCallBack = [&serverReady]() -> void { serverReady.count_down(); };
-			server->pushTask(startServerCallBack);
-
-			server->start();
-		});
-
 		serverReady.wait();
 
 		int requestCount { 3 };
@@ -214,9 +180,9 @@ TEST_CASE("server parallel", "[server]")
 		REQUIRE(getKeyResponse == "value 2");
 		REQUIRE(setAndGetValueResponse == "test value 2");
 		REQUIRE(undefinedCommandResponse == "(empty)");
-
-		server->stop();
 	}
+
+	server->stop();
 
 	std::filesystem::remove(testFilePath);
 }

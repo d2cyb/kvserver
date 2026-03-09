@@ -72,9 +72,9 @@ auto main(int argc, char *argv[]) -> int
 			  << "Config file: " << configFilePath << '\n';
 
 	try {
-		config = std::make_shared<Config>(configFilePath);
+		config	  = std::make_shared<Config>(configFilePath);
 		statistic = std::make_shared<Statistic>();
-		server = std::make_shared<Server>(port, config, statistic);
+		server	  = std::make_shared<Server>(port, config, statistic);
 
 		server->start();
 	} catch (const std::exception &e) {
