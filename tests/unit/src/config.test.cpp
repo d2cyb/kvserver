@@ -9,21 +9,11 @@
 
 import kvserver.config;
 
-using kvserver::Config, kvserver::ConfigKeyStats;
+using kvserver::Config, kvserver::ConfigData;
 
 TEST_CASE("Config basic operations", "[config]")
 {
 	const std::string testFilePath = "test_config.txt";
-
-	SECTION("must create empty config file, if not exists")
-	{
-		REQUIRE(std::filesystem::exists(testFilePath) == false);
-
-		Config config(testFilePath);
-
-		REQUIRE(std::filesystem::exists(testFilePath));
-		REQUIRE(config.get("nonexistent").has_value() == false);
-	}
 
 	SECTION("get must return values, if values set")
 	{
@@ -32,9 +22,19 @@ TEST_CASE("Config basic operations", "[config]")
 		config.set("key1", "value1");
 		config.set("key2", "value2");
 
-		REQUIRE(config.get("key1") == "value1");
-		REQUIRE(config.get("key2") == "value2");
+		REQUIRE((*config.get("key1")).value == "value1");
+		REQUIRE((*config.get("key2")).value == "value2");
 		REQUIRE(config.get("key3").has_value() == false);
+	}
+
+	SECTION("add new value")
+	{
+		Config config(testFilePath);
+
+		REQUIRE(config.get("new_key").has_value() == false);
+
+		config.set("new_key", "new_value");
+		REQUIRE((*config.get("new_key")).value == "new_value");
 	}
 
 	SECTION("must update value")
@@ -42,10 +42,10 @@ TEST_CASE("Config basic operations", "[config]")
 		Config config(testFilePath);
 
 		config.set("key1", "value1");
-		REQUIRE(config.get("key1") == "value1");
+		REQUIRE((*config.get("key1")).value == "value1");
 
 		config.set("key1", "new_value");
-		REQUIRE(config.get("key1") == "new_value");
+		REQUIRE((*config.get("key1")).value == "new_value");
 	}
 
 	SECTION("load data, after save in config class destructor")
@@ -59,8 +59,8 @@ TEST_CASE("Config basic operations", "[config]")
 
 		Config config(testFilePath);
 
-		REQUIRE(config.get("persistent1") == "value1");
-		REQUIRE(config.get("persistent2") == "value2");
+		REQUIRE((*config.get("persistent1")).value == "value1");
+		REQUIRE((*config.get("persistent2")).value == "value2");
 	}
 
 	SECTION("must empty data, if invalid json file")
@@ -72,43 +72,28 @@ TEST_CASE("Config basic operations", "[config]")
 		Config config(testFilePath);
 
 		config.set("new_key", "new_value");
-		REQUIRE(config.get("new_key") == "new_value");
+		REQUIRE((*config.get("new_key")).value == "new_value");
 	}
 
 	std::filesystem::remove(testFilePath);
 }
 
-// TODO (move to different class)
 TEST_CASE("read and write statistic", "[config][statistic]")
 {
 	const std::string testFilePath = "test_config_statistic.txt";
-
-	SECTION("must empty statistics, for new config")
-	{
-		Config config(testFilePath);
-
-		auto stats = config.getKeyStats("test_key");
-		REQUIRE(stats.reads == 0);
-		REQUIRE(stats.writes == 0);
-	}
 
 	SECTION("must empty statistics, for get not exists values")
 	{
 		Config config(testFilePath);
 
-		config.get("test_key");
-		auto stats = config.getKeyStats("test_key");
-
-		REQUIRE(stats.reads == 0);
-		REQUIRE(stats.writes == 0);
+		REQUIRE(not config.get("test_key").has_value());
 	}
 
 	SECTION("must changed write statistic, if set value")
 	{
 		Config config(testFilePath);
 
-		config.set("test_key", "test_value");
-		auto stats = config.getKeyStats("test_key");
+		auto stats = config.set("test_key", "test_value");
 
 		REQUIRE(stats.reads == 0);
 		REQUIRE(stats.writes == 1);
@@ -119,8 +104,7 @@ TEST_CASE("read and write statistic", "[config][statistic]")
 		Config config(testFilePath);
 
 		config.set("test_key", "test_value");
-		config.get("test_key");
-		auto stats = config.getKeyStats("test_key");
+		auto stats = *config.get("test_key");
 
 		REQUIRE(stats.reads == 1);
 		REQUIRE(stats.writes == 1);
@@ -156,7 +140,8 @@ TEST_CASE("Config thread safety", "[config][thread]")
 					std::string key { "key" + std::to_string(readIdx) };
 					std::string expected { "value" + std::to_string(readIdx) };
 
-					if (config.get(key).value_or("") == expected) {
+					if (config.get(key).value_or({ .value = "", .reads = 0, .writes = 0 }).value
+						== expected) {
 						successfulReads++;
 					}
 				}
@@ -178,14 +163,15 @@ TEST_CASE("Config thread safety", "[config][thread]")
 
 		std::vector<std::thread> threads;
 		threads.reserve(numThreads);
+		ConfigData lastSharedState;
 
 		for (int threadIdx = 0; threadIdx < numThreads; ++threadIdx) {
-			threads.emplace_back([&config, operationsPerThread, &sharedKey, threadIdx]() -> void {
+			threads.emplace_back([&]() -> void {
 				for (int i = 1; i <= operationsPerThread; ++i) {
 					if (i % 2 == 0) {
-						config.get(sharedKey);
+						lastSharedState = *config.get(sharedKey);
 					} else {
-						config.set(sharedKey, std::to_string(i));
+						lastSharedState = config.set(sharedKey, std::to_string(i));
 					}
 
 					std::string nonExistentKey { "thread_" + std::to_string(threadIdx) + "_key_"
@@ -199,10 +185,8 @@ TEST_CASE("Config thread safety", "[config][thread]")
 			thread.join();
 		}
 
-		auto configState = config.getKeyStats(sharedKey);
-
-		REQUIRE(configState.reads == numThreads * (operationsPerThread / 2));
-		REQUIRE(configState.writes == numThreads * (operationsPerThread / 2));
+		REQUIRE(lastSharedState.reads == numThreads * (operationsPerThread / 2));
+		REQUIRE(lastSharedState.writes == numThreads * (operationsPerThread / 2));
 	}
 
 	std::filesystem::remove(testFilePath);

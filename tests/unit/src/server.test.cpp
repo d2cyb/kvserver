@@ -6,7 +6,6 @@
 #include <boost/asio/read_until.hpp>
 #include <boost/throw_exception.hpp>
 #include <filesystem>
-#include <future>
 #include <latch>
 #include <memory>
 #include <string>
@@ -88,15 +87,12 @@ TEST_CASE("server", "[server]")
 	{
 		serverReady.wait();
 
-		// should return value on get commands
 		auto resultGet = sendCommand("localhost", portNum, "get key1");
-		REQUIRE(resultGet == "value 2");
+		REQUIRE(resultGet == "key1=value 2\nreads=1\nwrites=1");
 
-		// should return empty string on set commands
 		auto resultSet = sendCommand("localhost", portNum, "set key2 = test value 2");
-		REQUIRE(resultSet == "(empty)");
+		REQUIRE(resultSet == "key2=test value 2\nreads=0\nwrites=1");
 
-		// should return empty string on wrong commands
 		auto resultUndefinedCommand = sendCommand("localhost", portNum, "wrong command");
 		REQUIRE(resultUndefinedCommand == "(empty)");
 	}
@@ -177,8 +173,8 @@ TEST_CASE("server parallel", "[server]")
 
 		allRequestsDone.wait();
 
-		REQUIRE(getKeyResponse == "value 2");
-		REQUIRE(setAndGetValueResponse == "test value 2");
+		REQUIRE(getKeyResponse == "key1=value 2\nreads=1\nwrites=1");
+		REQUIRE(setAndGetValueResponse == "key2=test value 2\nreads=1\nwrites=1");
 		REQUIRE(undefinedCommandResponse == "(empty)");
 	}
 

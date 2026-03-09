@@ -17,7 +17,7 @@ using std::string;
 
 namespace kvserver {
 
-const uint32_t DEFAULT_OUTPUT_INTERVAL_SECONDS = 5 * 1000;
+const uint32_t DEFAULT_OUTPUT_INTERVAL_MILLISECONDS = 5 * 1000;
 
 export class Statistic {
 private:
@@ -38,7 +38,7 @@ public:
 		outputThread = std::jthread(&Statistic::periodicOutputWorker, this, intervalMilliseconds);
 	}
 	explicit Statistic()
-		: Statistic(DEFAULT_OUTPUT_INTERVAL_SECONDS)
+		: Statistic(DEFAULT_OUTPUT_INTERVAL_MILLISECONDS)
 	{
 	}
 	Statistic(const Statistic &)					  = delete;
@@ -69,11 +69,8 @@ public:
 private:
 	void periodicOutputWorker(std::stop_token stoken, int intervalMilliseconds)
 	{
-		while (true) {
+		while (not stoken.stop_requested()) {
 			std::this_thread::sleep_for(std::chrono::milliseconds(intervalMilliseconds));
-			if (stoken.stop_requested()) {
-				break;
-			}
 
 			auto now	   = std::chrono::system_clock::now();
 			auto timePoint = std::chrono::system_clock::to_time_t(now);

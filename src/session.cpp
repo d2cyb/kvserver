@@ -30,7 +30,6 @@ using boost::asio::streambuf;
 using boost::asio::use_awaitable;
 using boost::asio::ip::tcp;
 
-// TODO (move to env)
 const int MAXIMUM_MESSAGE_LENGTH = 4096;
 
 export class Session : public std::enable_shared_from_this<Session> {
@@ -38,7 +37,7 @@ private:
 	tcp::socket socket;
 	streambuf buffer;
 	shared_ptr<Config> config;
-	shared_ptr<Statistic> statistic; // TODO (replace to observer lambdaFunc)
+	shared_ptr<Statistic> statistic;
 
 public:
 	explicit Session(
@@ -83,23 +82,30 @@ public:
 	}
 
 private:
+	auto formatResponse(const std::string &key, ConfigData &configData)
+	{
+		return std::format(
+			"{}={}\nreads={}\nwrites=1", key, configData.value, configData.reads, configData.writes
+		);
+	}
+
 	auto processRequestedCommand(const string &requestString) -> string
 	{
 		auto command = parseCommand(requestString);
 		string response { "(empty)" };
 		if (const auto commandGet { get_if<CommandGet>(&command) }; commandGet) {
-			if (auto value = config->get(commandGet->key)) {
-				response = *value;
+			if (auto configData = config->get(commandGet->key)) {
+				response = formatResponse(commandGet->key, *configData);
 			}
 		} else if (const auto commandSet { get_if<CommandSet>(&command) }; commandSet) {
-			config->set(commandSet->key, commandSet->value);
+			auto configData = config->set(commandSet->key, commandSet->value);
+			response		= formatResponse(commandSet->key, configData);
 		} else if (const auto w { get_if<CommandUndefined>(&command) }; w) {
-			// TODO (write to journal)
+			// unknown command
 		}
 		return response;
 	}
 
-	// TODO (replace to lambda)
 	auto waitForRequest() -> awaitable<void>
 	{
 		while (true) {

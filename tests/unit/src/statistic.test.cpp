@@ -45,7 +45,6 @@ public:
 
 TEST_CASE("Statistic", "[statistic]")
 {
-
 	SECTION("should stats empty on init")
 	{
 		Statistic stats { STATISTIC_OUTOUT_INTERVAL };

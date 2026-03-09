@@ -68,8 +68,6 @@ public:
 		}
 		--threadsCount;
 
-		// TODO (if threads above 2, threads minus 2: stats, configs)
-
 		auto &ios = ioContext;
 		boost::thread_group threadsGroup;
 		for (std::size_t i = 0; i < threadsCount; ++i) {
