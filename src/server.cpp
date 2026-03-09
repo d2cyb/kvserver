@@ -6,6 +6,7 @@ module;
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/thread/thread.hpp>
+#include <iostream>
 #include <memory>
 
 export module kvserver.server;
@@ -27,8 +28,6 @@ using boost::asio::signal_set;
 using boost::asio::use_awaitable;
 using boost::asio::ip::tcp;
 namespace this_coro = boost::asio::this_coro;
-
-const int MAXIMUM_MESSAGE_LENGTH = 1024;
 
 export class Server {
 private:
@@ -77,7 +76,10 @@ public:
 			threadsGroup.create_thread([&ios]() { ios.run(); });
 		}
 
-		signals.async_wait([&](auto, auto) { stop(); });
+		signals.async_wait([&](auto, auto) {
+			std::cout << "A program termination signal was received. Stopping services...\n";
+			stop();
+		});
 
 		threadsGroup.join_all();
 		ios.run();

@@ -49,8 +49,14 @@ auto sendCommand(const std::string &host, uint16_t port, const std::string &comm
 		socket.close();
 
 		return data;
-	} catch (std::exception &e) {
-		return "ERROR: " + std::string(e.what());
+	} catch (boost::system::system_error &err) {
+		if (err.code() == boost::asio::error::eof) {
+			return "connection closed";
+		} else {
+			return "ERROR: " + std::string(err.what());
+		}
+	} catch (std::exception &err) {
+		return "ERROR: " + std::string(err.what());
 	}
 }
 
@@ -61,10 +67,10 @@ TEST_CASE("server", "[server]")
 	const uint16_t portNum { 8080 };
 	const std::string testFilePath = "server_config.txt";
 
+	std::filesystem::remove(testFilePath);
+
 	SECTION("procession commands")
 	{
-		std::filesystem::remove(testFilePath);
-
 		std::latch serverReady { 1 };
 		std::jthread serverThread([portNum, &testFilePath, &serverReady]() -> void {
 			auto config = std::make_shared<Config>(testFilePath);
@@ -97,6 +103,60 @@ TEST_CASE("server", "[server]")
 		server->stop();
 	}
 
+	SECTION("must receive message less 4049 chars")
+	{
+		std::latch serverReady { 1 };
+		std::jthread serverThread([portNum, &testFilePath, &serverReady]() -> void {
+			auto config = std::make_shared<Config>(testFilePath);
+			config->set("key1", "value 2");
+
+			auto statistic = std::make_shared<Statistic>();
+
+			server = std::make_shared<Server>(portNum, config, statistic);
+
+			auto startServerCallBack = [&serverReady]() -> void { serverReady.count_down(); };
+			server->pushTask(startServerCallBack);
+
+			server->start();
+		});
+
+		serverReady.wait();
+
+		std::string tooLargeMessage(4095, 'A');
+		auto resultGet = sendCommand("localhost", portNum, tooLargeMessage);
+
+		REQUIRE(resultGet == "(empty)");
+
+		server->stop();
+	}
+
+	SECTION("must close connection if message too large")
+	{
+		std::latch serverReady { 1 };
+		std::jthread serverThread([portNum, &testFilePath, &serverReady]() -> void {
+			auto config = std::make_shared<Config>(testFilePath);
+			config->set("key1", "value 2");
+
+			auto statistic = std::make_shared<Statistic>();
+
+			server = std::make_shared<Server>(portNum, config, statistic);
+
+			auto startServerCallBack = [&serverReady]() -> void { serverReady.count_down(); };
+			server->pushTask(startServerCallBack);
+
+			server->start();
+		});
+
+		serverReady.wait();
+
+		std::string tooLargeMessage(4096, 'A');
+		auto resultGet = sendCommand("localhost", portNum, tooLargeMessage);
+
+		REQUIRE(resultGet == "connection closed");
+
+		server->stop();
+	}
+
 	std::filesystem::remove(testFilePath);
 }
 
@@ -105,10 +165,10 @@ TEST_CASE("server parallel", "[server]")
 	const uint16_t portNum { 8080 };
 	const std::string testFilePath = "parallel_server_config.txt";
 
+	std::filesystem::remove(testFilePath);
+
 	SECTION("procession commands")
 	{
-		std::filesystem::remove(testFilePath);
-
 		std::latch serverReady { 1 };
 		std::jthread serverThread([portNum, &testFilePath, &serverReady]() -> void {
 			auto config = std::make_shared<Config>(testFilePath);

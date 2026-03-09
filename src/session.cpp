@@ -29,10 +29,13 @@ using boost::asio::streambuf;
 using boost::asio::use_awaitable;
 using boost::asio::ip::tcp;
 
+// TODO (move to env)
+const int MAXIMUM_MESSAGE_LENGTH = 4096;
+
 export class Session : public std::enable_shared_from_this<Session> {
 private:
 	tcp::socket socket;
-	streambuf buffer; // TODO (change to string)
+	streambuf buffer;
 	shared_ptr<Config> config;
 	shared_ptr<Statistic> statistic; // TODO (replace to observer lambdaFunc)
 
@@ -43,6 +46,7 @@ public:
 		const shared_ptr<Statistic> &kvStatistic
 	)
 		: socket(std::move(tcpSocket))
+		, buffer(streambuf(MAXIMUM_MESSAGE_LENGTH))
 		, config(kvConfig)
 		, statistic(kvStatistic)
 	{
@@ -109,23 +113,19 @@ private:
 
 				statistic->recordCommand();
 
-				// TODO (Delete)
-				// std::cout << "Response '" << response << "', length: " << response.size() <<
-				// '\n';
-
 				co_await async_write(
 					socket, boost::asio::buffer(response.data(), response.size()), use_awaitable
 				);
 			} catch (boost::system::system_error &err) {
 				if (err.code() == boost::asio::error::eof) {
-					// TODO (delete)
-					// std::cout << "Remote peer closed connection\n";
-					break;
+					// Remote peer closed connection
 				} else {
-					std::cerr << "Server: exception wait for request: " << err.what() << '\n';
+					std::cerr << "Server error: wait for request: " << err.what() << '\n';
 				}
+				break;
 			} catch (std::exception &err) {
-				std::cerr << "Server: exception wait for request: " << err.what() << '\n';
+				std::cerr << "Server exception: wait for request: " << err.what() << '\n';
+				break;
 			}
 		}
 	}

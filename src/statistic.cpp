@@ -59,7 +59,6 @@ public:
 		return totalCommands.load();
 	}
 
-	// TODO (delete, and replace shared mutex to regular mutex)
 	[[nodiscard]] auto getRecentCommands() const -> uint32_t
 	{
 		std::shared_lock<std::shared_timed_mutex> recentCommandReaderLock(recentCommandsMutex);

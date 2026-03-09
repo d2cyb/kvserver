@@ -48,8 +48,14 @@ auto sendCommand(const std::string &host, uint16_t port, const std::string &comm
 		socket.close();
 
 		return data;
-	} catch (std::exception &e) {
-		return "ERROR: " + std::string(e.what());
+	} catch (boost::system::system_error &err) {
+		if (err.code() == boost::asio::error::eof) {
+			return "connection closed";
+		} else {
+			return "ERROR: " + std::string(err.what());
+		}
+	} catch (std::exception &err) {
+		return "ERROR: " + std::string(err.what());
 	}
 }
 
