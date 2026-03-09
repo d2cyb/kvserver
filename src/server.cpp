@@ -6,11 +6,13 @@ module;
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/thread/thread.hpp>
+#include <memory>
 
 export module kvserver.server;
 
 import kvserver.config;
 import kvserver.session;
+import kvserver.statistic;
 
 namespace kvserver {
 
@@ -33,12 +35,18 @@ private:
 	io_context ioContext;
 	uint16_t portNum;
 	shared_ptr<Config> config;
+	shared_ptr<Statistic> statistic;
 	signal_set signals;
 
 public:
-	explicit Server(uint16_t port, shared_ptr<Config> kvConfig)
+	explicit Server(
+		uint16_t port,
+		const shared_ptr<Config> &kvConfig,
+		const shared_ptr<Statistic> kvstatistic
+	)
 		: portNum(port)
 		, config(kvConfig)
+		, statistic(kvstatistic)
 		, signals(ioContext, SIGINT, SIGTERM)
 	{
 	}
@@ -61,6 +69,8 @@ public:
 		}
 		--threadsCount;
 
+		// TODO (if threads above 2, threads minus 2: stats, configs)
+
 		auto &ios = ioContext;
 		boost::thread_group threadsGroup;
 		for (std::size_t i = 0; i < threadsCount; ++i) {
@@ -69,8 +79,8 @@ public:
 
 		signals.async_wait([&](auto, auto) { stop(); });
 
-		ios.run();
 		threadsGroup.join_all();
+		ios.run();
 	}
 
 	void stop()
@@ -89,7 +99,10 @@ private:
 		auto executor = co_await this_coro::executor;
 		tcp::acceptor acceptor(executor, { tcp::v4(), portNum });
 		for (;;) {
-			std::make_shared<Session>(co_await acceptor.async_accept(use_awaitable), config)->run();
+			std::make_shared<Session>(
+				co_await acceptor.async_accept(use_awaitable), config, statistic
+			)
+				->run();
 		}
 	}
 };

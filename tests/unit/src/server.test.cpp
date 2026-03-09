@@ -16,11 +16,13 @@
 
 import kvserver.server;
 import kvserver.config;
+import kvserver.statistic;
 import kvserver.utilities;
 
 using boost::asio::ip::tcp;
 using kvserver::Config;
 using kvserver::Server;
+using kvserver::Statistic;
 
 const int MAXIMUM_MESSAGE_LENGTH = 1024;
 
@@ -68,7 +70,9 @@ TEST_CASE("server", "[server]")
 			auto config = std::make_shared<Config>(testFilePath);
 			config->set("key1", "value 2");
 
-			server = std::make_shared<Server>(portNum, config);
+			auto statistic = std::make_shared<Statistic>();
+
+			server = std::make_shared<Server>(portNum, config, statistic);
 
 			auto startServerCallBack = [&serverReady]() -> void { serverReady.count_down(); };
 			server->pushTask(startServerCallBack);
@@ -110,7 +114,8 @@ TEST_CASE("server parallel", "[server]")
 			auto config = std::make_shared<Config>(testFilePath);
 			config->set("key1", "value 2");
 
-			server = std::make_shared<Server>(portNum, config);
+			auto statistic = std::make_shared<Statistic>();
+			server		   = std::make_shared<Server>(portNum, config, statistic);
 
 			auto startServerCallBack = [&serverReady]() -> void { serverReady.count_down(); };
 			server->pushTask(startServerCallBack);

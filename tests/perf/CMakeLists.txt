@@ -16,6 +16,7 @@ file(
     GLOB_RECURSE
     UNIT_TEST_FILES
     ${PROJECT_SOURCE_DIR}/src/server.bench.cpp
+    ${PROJECT_SOURCE_DIR}/src/statistic.bench.cpp
 )
 
 add_executable(${BENCHMARK_TESTS_PROJECT_NAME})

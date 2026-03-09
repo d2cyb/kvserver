@@ -13,6 +13,7 @@ export module kvserver.session;
 
 import kvserver.config;
 import kvserver.utilities;
+import kvserver.statistic;
 
 namespace kvserver {
 
@@ -31,13 +32,19 @@ using boost::asio::ip::tcp;
 export class Session : public std::enable_shared_from_this<Session> {
 private:
 	tcp::socket socket;
-	streambuf buffer;
+	streambuf buffer; // TODO (change to string)
 	shared_ptr<Config> config;
+	shared_ptr<Statistic> statistic; // TODO (replace to observer lambdaFunc)
 
 public:
-	explicit Session(tcp::socket tcpSocket, shared_ptr<Config> kvConfig)
+	explicit Session(
+		tcp::socket tcpSocket,
+		const shared_ptr<Config> &kvConfig,
+		const shared_ptr<Statistic> &kvStatistic
+	)
 		: socket(std::move(tcpSocket))
 		, config(kvConfig)
+		, statistic(kvStatistic)
 	{
 	}
 	Session()									  = delete;
@@ -88,10 +95,11 @@ private:
 		return response;
 	}
 
+	// TODO (replace to lambda)
 	auto waitForRequest() -> awaitable<void>
 	{
-		try {
-			while (true) {
+		while (true) {
+			try {
 				co_await async_read_until(socket, buffer, "\n", use_awaitable);
 
 				string request { std::istreambuf_iterator<char>(&buffer),
@@ -99,22 +107,26 @@ private:
 
 				string response = processRequestedCommand(request);
 
+				statistic->recordCommand();
+
 				// TODO (Delete)
-				std::cout << "Response '" << response << "', length: " << response.size() << '\n';
+				// std::cout << "Response '" << response << "', length: " << response.size() <<
+				// '\n';
 
 				co_await async_write(
 					socket, boost::asio::buffer(response.data(), response.size()), use_awaitable
 				);
-			}
-		} catch (boost::system::system_error &err) {
-			if (err.code() == boost::asio::error::eof) {
-				std::cout << "Remote peer closed connection\n";
-				shutdown();
-			} else {
+			} catch (boost::system::system_error &err) {
+				if (err.code() == boost::asio::error::eof) {
+					// TODO (delete)
+					// std::cout << "Remote peer closed connection\n";
+					break;
+				} else {
+					std::cerr << "Server: exception wait for request: " << err.what() << '\n';
+				}
+			} catch (std::exception &err) {
 				std::cerr << "Server: exception wait for request: " << err.what() << '\n';
 			}
-		} catch (std::exception &err) {
-			std::cerr << "Server: exception wait for request: " << err.what() << '\n';
 		}
 	}
 };

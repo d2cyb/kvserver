@@ -13,21 +13,21 @@ module;
 
 export module kvserver.config;
 
-export namespace kvserver {
+namespace kvserver {
 
-struct ConfigKeyStats {
+export struct ConfigKeyStats {
 	int reads { 0 };
 	int writes { 0 };
 };
 
-class Config {
+export class Config {
 private:
 	std::string configFilePath;
 	std::unordered_map<std::string, std::string> configData;
 	// TODO (move to different statistics class)
 	std::unordered_map<std::string, ConfigKeyStats> keyStatus;
 
-	// Replace to different locks: shared_timed_mutex, std::scoped_lock
+	// TODO (Replace to different locks: shared_timed_mutex, std::scoped_lock)
 	mutable std::mutex dataMutex;
 	mutable std::mutex fileMutex;
 	mutable std::mutex statusMutex;

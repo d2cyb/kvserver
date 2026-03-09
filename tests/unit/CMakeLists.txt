@@ -17,6 +17,7 @@ file(
     UNIT_TEST_FILES
     ${PROJECT_SOURCE_DIR}/src/config.test.cpp
     ${PROJECT_SOURCE_DIR}/src/server.test.cpp
+    ${PROJECT_SOURCE_DIR}/src/statistic.test.cpp
     ${PROJECT_SOURCE_DIR}/src/utilities.test.cpp
 )
 

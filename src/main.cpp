@@ -7,12 +7,15 @@
 
 import kvserver.server;
 import kvserver.config;
+import kvserver.statistic;
 
 using kvserver::Config;
 using kvserver::Server;
+using kvserver::Statistic;
 namespace fs = std::filesystem;
 
 std::shared_ptr<Config> config;
+std::shared_ptr<Statistic> statistic;
 std::shared_ptr<Server> server;
 
 void printUsageMessage(const std::string_view &appName)
@@ -70,7 +73,8 @@ auto main(int argc, char *argv[]) -> int
 
 	try {
 		config = std::make_shared<Config>(configFilePath);
-		server = std::make_shared<Server>(port, config);
+		statistic = std::make_shared<Statistic>();
+		server = std::make_shared<Server>(port, config, statistic);
 
 		server->start();
 	} catch (const std::exception &e) {

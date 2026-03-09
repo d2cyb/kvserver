@@ -2,6 +2,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <string>
 #include <thread>
 
 #include "kvserver_lib_export.h"
@@ -169,40 +170,39 @@ TEST_CASE("Config thread safety", "[config][thread]")
 		REQUIRE(successfulReads == numThreads * readsPerThread);
 	}
 
-	SECTION("concurrent reads and writes")
+	SECTION("should calculate, concurrent reads and writes")
 	{
-		const int numThreads { 5 };
-		const int operationsPerThread { 50 };
-		std::atomic<int> operationsCompleted { 0 };
+		const int numThreads		  = 5;
+		const int operationsPerThread = 50;
+		const std::string sharedKey	  = "shared_key";
 
-		std::vector<std::thread> threads {};
+		std::vector<std::thread> threads;
 		threads.reserve(numThreads);
 
 		for (int threadIdx = 0; threadIdx < numThreads; ++threadIdx) {
-			threads.emplace_back(
-				[&config, &operationsCompleted, operationsPerThread, threadIdx]() -> void {
-					for (int readWriteIdx = 0; readWriteIdx < operationsPerThread; ++readWriteIdx) {
-						if (readWriteIdx % 2 == 0) {
-							config.get("shared_key");
-						} else {
-							config.set(
-								"shared_key", "value_from_thread_" + std::to_string(threadIdx)
-							);
-						}
-						operationsCompleted++;
+			threads.emplace_back([&config, operationsPerThread, &sharedKey, threadIdx]() -> void {
+				for (int i = 1; i <= operationsPerThread; ++i) {
+					if (i % 2 == 0) {
+						config.get(sharedKey);
+					} else {
+						config.set(sharedKey, std::to_string(i));
 					}
+
+					std::string nonExistentKey { "thread_" + std::to_string(threadIdx) + "_key_"
+												 + std::to_string(i) };
+					config.get(nonExistentKey);
 				}
-			);
+			});
 		}
 
 		for (auto &thread : threads) {
 			thread.join();
 		}
 
-		REQUIRE(operationsCompleted == numThreads * operationsPerThread);
+		auto configState = config.getKeyStats(sharedKey);
 
-		auto stats = config.getKeyStats("shared_key");
-		REQUIRE(stats.reads + stats.writes > 0);
+		REQUIRE(configState.reads == numThreads * (operationsPerThread / 2));
+		REQUIRE(configState.writes == numThreads * (operationsPerThread / 2));
 	}
 
 	std::filesystem::remove(testFilePath);
