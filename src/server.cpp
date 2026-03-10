@@ -31,80 +31,80 @@ namespace this_coro = boost::asio::this_coro;
 
 export class Server {
 private:
-	io_context ioContext;
-	uint16_t portNum;
-	shared_ptr<Config> config;
-	shared_ptr<Statistic> statistic;
-	signal_set signals;
+    io_context ioContext;
+    uint16_t portNum;
+    shared_ptr<Config> config;
+    shared_ptr<Statistic> statistic;
+    signal_set signals;
 
 public:
-	explicit Server(
-		uint16_t port,
-		const shared_ptr<Config> &kvConfig,
-		const shared_ptr<Statistic> kvstatistic
-	)
-		: portNum(port)
-		, config(kvConfig)
-		, statistic(kvstatistic)
-		, signals(ioContext, SIGINT, SIGTERM)
-	{
-	}
-	Server()									= delete;
-	Server(const Server &)						= delete;
-	Server(const Server &&)						= delete;
-	auto operator=(const Server &) -> Server &	= delete;
-	auto operator=(const Server &&) -> Server & = delete;
-	~Server()
-	{
-		signals.clear();
-	}
+    explicit Server(
+        uint16_t port,
+        const shared_ptr<Config> &kvConfig,
+        const shared_ptr<Statistic> kvstatistic
+    )
+        : portNum(port)
+        , config(kvConfig)
+        , statistic(kvstatistic)
+        , signals(ioContext, SIGINT, SIGTERM)
+    {
+    }
+    Server()                                    = delete;
+    Server(const Server &)                      = delete;
+    Server(const Server &&)                     = delete;
+    auto operator=(const Server &) -> Server &  = delete;
+    auto operator=(const Server &&) -> Server & = delete;
+    ~Server()
+    {
+        signals.clear();
+    }
 
-	void start(std::size_t threadsCount = 0)
-	{
-		co_spawn(ioContext, listener(), detached);
+    void start(std::size_t threadsCount = 0)
+    {
+        co_spawn(ioContext, listener(), detached);
 
-		if (!threadsCount) {
-			threadsCount = (std::max)(static_cast<int>(boost::thread::hardware_concurrency()), 1);
-		}
-		--threadsCount;
+        if (!threadsCount) {
+            threadsCount = (std::max)(static_cast<int>(boost::thread::hardware_concurrency()), 1);
+        }
+        --threadsCount;
 
-		auto &ios = ioContext;
-		boost::thread_group threadsGroup;
-		for (std::size_t i = 0; i < threadsCount; ++i) {
-			threadsGroup.create_thread([&ios]() { ios.run(); });
-		}
+        auto &ios = ioContext;
+        boost::thread_group threadsGroup;
+        for (std::size_t i = 0; i < threadsCount; ++i) {
+            threadsGroup.create_thread([&ios]() { ios.run(); });
+        }
 
-		signals.async_wait([&](auto, auto) {
-			std::cout << "A program termination signal was received. Stopping services...\n";
-			stop();
-		});
+        signals.async_wait([&](auto, auto) {
+            std::cout << "A program termination signal was received. Stopping services...\n";
+            stop();
+        });
 
-		threadsGroup.join_all();
-		ios.run();
-	}
+        threadsGroup.join_all();
+        ios.run();
+    }
 
-	void stop()
-	{
-		ioContext.stop();
-	}
+    void stop()
+    {
+        ioContext.stop();
+    }
 
-	template<class T> void pushTask(const T &task)
-	{
-		boost::asio::post(ioContext, task);
-	}
+    template<class T> void pushTask(const T &task)
+    {
+        boost::asio::post(ioContext, task);
+    }
 
 private:
-	auto listener() -> awaitable<void>
-	{
-		auto executor = co_await this_coro::executor;
-		tcp::acceptor acceptor(executor, { tcp::v4(), portNum });
-		for (;;) {
-			std::make_shared<Session>(
-				co_await acceptor.async_accept(use_awaitable), config, statistic
-			)
-				->run();
-		}
-	}
+    auto listener() -> awaitable<void>
+    {
+        auto executor = co_await this_coro::executor;
+        tcp::acceptor acceptor(executor, { tcp::v4(), portNum });
+        for (;;) {
+            std::make_shared<Session>(
+                co_await acceptor.async_accept(use_awaitable), config, statistic
+            )
+                ->run();
+        }
+    }
 };
 
 } // namespace kvserver

@@ -48,7 +48,7 @@ cmake --build . --config Debug --target all
 Для запуска тестов выполните следующую команду:
 
 ```sh
-./build/bin/kvserver_unit `
+./build/bin/kvserver_unit
 ```
 
 ### Нагрузочные тесты
@@ -62,7 +62,7 @@ cmake --build . --config Debug --target all
 Для запуска тестов выполните следующую команду:
 
 ```sh
-(cd ./build/tests/unit && ctest -T memcheck)`
+(cd ./build/tests/unit && ctest -T memcheck)
 ```
 
 ## Пример работы программы
