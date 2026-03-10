@@ -3,8 +3,10 @@ module;
 #include <atomic>
 #include <chrono>
 #include <cmath>
+#include <functional>
 #include <iomanip>
 #include <iostream>
+#include <mutex>
 #include <shared_mutex>
 #include <stop_token>
 #include <string>
@@ -17,7 +19,8 @@ using std::string;
 
 namespace kvserver {
 
-const uint32_t DEFAULT_OUTPUT_INTERVAL_MILLISECONDS = 5 * 1000;
+const uint32_t MILLISECONDS_IN_SECOND               = 1000;
+const uint32_t DEFAULT_OUTPUT_INTERVAL_MILLISECONDS = 5 * MILLISECONDS_IN_SECOND;
 
 export class Statistic {
 private:
@@ -32,10 +35,11 @@ public:
     explicit Statistic(uint32_t printIntervalSeconds)
         : intervalMilliseconds(printIntervalSeconds)
         , intervalSeconds(
-              std::ceil(static_cast<double>(intervalMilliseconds) / 1000.0 * 10.0) / 10.0
+              std::ceil(static_cast<double>(intervalMilliseconds) / MILLISECONDS_IN_SECOND * 10.0)
+              / 10.0
           )
     {
-        outputThread = std::jthread(&Statistic::periodicOutputWorker, this, intervalMilliseconds);
+        outputThread = std::jthread(std::bind_front(&Statistic::periodicOutputWorker, this));
     }
     explicit Statistic()
         : Statistic(DEFAULT_OUTPUT_INTERVAL_MILLISECONDS)
@@ -45,13 +49,13 @@ public:
     Statistic(const Statistic &&)                     = delete;
     auto operator=(const Statistic &) -> Statistic &  = delete;
     auto operator=(const Statistic &&) -> Statistic & = delete;
-    ~Statistic() { }
+    ~Statistic()                                      = default;
 
     void recordCommand()
     {
         totalCommands++;
 
-        std::lock_guard<std::shared_timed_mutex> recentCommandWriterLock(recentCommandsMutex);
+        std::scoped_lock<std::shared_timed_mutex> recentCommandWriterLock(recentCommandsMutex);
         recentCommands++;
     }
 
@@ -67,15 +71,15 @@ public:
     }
 
 private:
-    void periodicOutputWorker(std::stop_token stoken, int intervalMilliseconds)
+    void periodicOutputWorker(std::stop_token stopToken)
     {
-        while (not stoken.stop_requested()) {
+        while (not stopToken.stop_requested()) {
             std::this_thread::sleep_for(std::chrono::milliseconds(intervalMilliseconds));
 
             auto now       = std::chrono::system_clock::now();
             auto timePoint = std::chrono::system_clock::to_time_t(now);
             {
-                std::lock_guard<std::shared_timed_mutex> recentCommandWriterLock(
+                std::scoped_lock<std::shared_timed_mutex> recentCommandWriterLock(
                     recentCommandsMutex
                 );
 

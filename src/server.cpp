@@ -1,10 +1,12 @@
 module;
 
+#include <algorithm>
 #include <boost/asio.hpp>
 #include <boost/asio/co_spawn.hpp>
 #include <boost/asio/detached.hpp>
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/ip/tcp.hpp>
+#include <boost/asio/signal_set.hpp>
 #include <boost/thread/thread.hpp>
 #include <iostream>
 #include <memory>
@@ -59,12 +61,12 @@ public:
         signals.clear();
     }
 
-    void start(std::size_t threadsCount = 0)
+    void start(uint32_t threadsCount = 0)
     {
         co_spawn(ioContext, listener(), detached);
 
         if (!threadsCount) {
-            threadsCount = (std::max)(static_cast<int>(boost::thread::hardware_concurrency()), 1);
+            threadsCount = std::max(boost::thread::hardware_concurrency(), 1u);
         }
         --threadsCount;
 

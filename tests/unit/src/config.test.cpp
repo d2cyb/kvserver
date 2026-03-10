@@ -176,7 +176,7 @@ TEST_CASE("Config thread safety", "[config][thread]")
         std::atomic<int> successfulReads { 0 };
 
         for (int threadIdx = 0; threadIdx < numThreads; ++threadIdx) {
-            threads.emplace_back([&config, &successfulReads, readsPerThread]() -> void {
+            threads.emplace_back([&config, &successfulReads]() -> void {
                 for (int readIdx = 0; readIdx < readsPerThread; ++readIdx) {
                     string key { "key" + std::to_string(readIdx) };
                     string expected { "value" + std::to_string(readIdx) };

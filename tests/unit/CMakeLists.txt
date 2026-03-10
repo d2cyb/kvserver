@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.28)
+cmake_minimum_required(VERSION 3.31)
 
 project(
     ${PROJECT_NAME}_unit
@@ -9,7 +9,9 @@ message(STATUS "Unit tests enabled")
 
 set(UNIT_TESTS_PROJECT_NAME ${PROJECT_NAME})
 
+
 find_package(Catch2 3 REQUIRED)
+find_package(Boost CONFIG)
 find_package(${LIBRARY_NAME} PATHS ${CMAKE_BINARY_DIR})
 
 file(
@@ -43,6 +45,8 @@ target_include_directories(${UNIT_TESTS_PROJECT_NAME}
 target_link_libraries(${UNIT_TESTS_PROJECT_NAME} PRIVATE
     ${LIBRARY_NAME}
     Catch2::Catch2WithMain
+    boost_thread
+    pthread
 )
 
 include(Catch)

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.28)
+cmake_minimum_required(VERSION 3.31)
 
 project(kvserver
         VERSION 0.0.1
@@ -14,11 +14,7 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
 
-if(POLICY CMP0167)
-  cmake_policy(SET CMP0167 NEW)
-endif()
-
-find_package(Boost COMPONENTS thread json)
+find_package(Boost CONFIG REQUIRED COMPONENTS json thread container atomic chrono date_time)
 find_package(${LIBRARY_NAME} PATHS ${CMAKE_BINARY_DIR})
 
 file(GLOB_RECURSE KVSERVER_SOURCE_FILES
@@ -60,8 +56,12 @@ target_include_directories(${LIBRARY_NAME} PRIVATE
 )
 
 target_link_libraries(${LIBRARY_NAME} PUBLIC
-    Boost::thread
-    Boost::json
+    boost_json
+    boost_thread
+    boost_container
+    boost_atomic
+    boost_chrono
+    boost_date_time
     pthread
 )
 
@@ -115,31 +115,13 @@ install(FILES ${LIBRARY_NAME}-config.cmake
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${LIBRARY_NAME}
 )
 
-target_compile_options(${APP_EXECUTABLE_NAME} PRIVATE
-    -Wall -Wextra -Werror -pedantic
-)
-target_compile_options(${LIBRARY_NAME} PRIVATE
-    -Wall -Wextra -Werror -pedantic
-)
-
-# lints
-set(ENABLE_TIDY_CHECK ON)
-find_program(CLANG_TIDY_COMMAND NAMES clang-tidy)
-if (ENABLE_TIDY_CHECK)
-    if(NOT CLANG_TIDY_COMMAND)
-        message(WARNING "Could not find clang-tidy!")
-        set(CMAKE_CXX_CLANG_TIDY "" CACHE STRING "" FORCE)
-    else()
-        message(STATUS "clang-tidy enabled")
-        set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-        set(CMAKE_CXX_CLANG_TIDY "clang-tidy;-format-style='file'")
-    endif()
-else()
-    message(STATUS "clang-tidy disabled ")
+if(NOT kvserver_DEVELOPER_MODE)
+  return()
+elseif(NOT PROJECT_IS_TOP_LEVEL)
+  message(
+      AUTHOR_WARNING
+      "Developer mode is intended for developers of kvserver"
+  )
 endif()
 
-# ctest -T memcheck
-find_program(CTEST_MEMORYCHECK_COMMAND NAMES valgrind)
-
-# tests
-add_subdirectory(tests)
+include(cmake/dev-mode.cmake)

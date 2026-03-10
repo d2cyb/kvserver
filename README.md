@@ -65,10 +65,17 @@ cmake --build . --config Debug --target all
 (cd ./build/tests/unit && ctest -T memcheck)
 ```
 
+
 ## Пример работы программы
-Запустить сервер
+Запустить собранный сервер
 ```sh
 ./build/bin/kvserver 8080
+```
+
+Или собрать и запустить сервер в docker-контейере
+```sh
+docker build -t kvserver-release --target release .
+docker run --rm -p 8080:8080 -v ./config.txt:/app/config.txt kvserver-release:latest
 ```
 
 Выполнить запрос с помощью тестового клиента example_client:

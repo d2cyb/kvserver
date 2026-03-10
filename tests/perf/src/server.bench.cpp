@@ -101,13 +101,13 @@ TEST_CASE("server requests benchmark", "[server][benchmark]")
 
     BENCHMARK("parallel requests: get, set, wrong command")
     {
-        std::jthread getThread([portNum]() -> void {
+        std::jthread getThread([]() -> void {
             sendCommand("localhost", portNum, "get key1");
         });
-        std::jthread setThread([portNum]() -> void {
+        std::jthread setThread([]() -> void {
             sendCommand("localhost", portNum, "set key2 = test value 2");
         });
-        std::jthread undefinedCommandThread([portNum]() -> void {
+        std::jthread undefinedCommandThread([]() -> void {
             sendCommand("localhost", portNum, "wrong command");
         });
     };

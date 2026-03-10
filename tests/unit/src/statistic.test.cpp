@@ -21,11 +21,11 @@ private:
     std::ostream &stream;
 
 public:
-    explicit OutputStreamRedirector(std::ostream &stream)
-        : originalBuffer(stream.rdbuf())
-        , stream(stream)
+    explicit OutputStreamRedirector(std::ostream &outStream)
+        : originalBuffer(outStream.rdbuf())
+        , stream(outStream)
     {
-        stream.rdbuf(outputBuffer.rdbuf());
+        outStream.rdbuf(outputBuffer.rdbuf());
     }
     OutputStreamRedirector(const OutputStreamRedirector &)                      = delete;
     OutputStreamRedirector(const OutputStreamRedirector &&)                     = delete;
@@ -103,7 +103,7 @@ TEST_CASE("Statistic", "[statistic]")
         threads.reserve(threadsNum);
 
         for (int t = 0; t < threadsNum; ++t) {
-            threads.emplace_back([&stats, comandsPerThread]() -> void {
+            threads.emplace_back([&stats]() -> void {
                 for (int i = 0; i < comandsPerThread; ++i) {
                     stats.recordCommand();
                 }

@@ -30,7 +30,8 @@ const int MAXIMUM_MESSAGE_LENGTH = 1024;
 auto sendCommand(const string &host, uint16_t port, const string &command) -> string
 {
     try {
-        boost::asio::io_context io_context;
+        boost::asio::streambuf sbuff;
+        boost::asio::io_context io_context{};
         tcp::resolver resolver(io_context);
         tcp::resolver::results_type endpoints = resolver.resolve(host, std::to_string(port));
 
@@ -158,18 +159,18 @@ TEST_CASE("server parallel", "[server]")
         int requestCount { 3 };
         std::latch allRequestsDone(requestCount);
 
-        auto getKeyFuture               = std::async([portNum, &allRequestsDone]() -> string {
+        auto getKeyFuture               = std::async([&allRequestsDone]() -> string {
             auto response = sendCommand("localhost", portNum, "get key1");
             allRequestsDone.count_down();
             return response;
         });
-        auto setAndGetValueFuture       = std::async([portNum, &allRequestsDone]() -> string {
+        auto setAndGetValueFuture       = std::async([&allRequestsDone]() -> string {
             sendCommand("localhost", portNum, "set key2 = test value 2");
             auto response = sendCommand("localhost", portNum, "get key2");
             allRequestsDone.count_down();
             return response;
         });
-        auto sendUndefinedCommandFuture = std::async([portNum, &allRequestsDone]() -> string {
+        auto sendUndefinedCommandFuture = std::async([&allRequestsDone]() -> string {
             auto response = sendCommand("localhost", portNum, "wrong command");
             allRequestsDone.count_down();
             return response;

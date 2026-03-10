@@ -6,9 +6,9 @@ module;
 
 export module kvserver.utilities;
 
-export namespace kvserver {
+namespace kvserver {
 
-auto trim(const std::string &targetString) -> std::string
+export auto trim(const std::string &targetString) -> std::string
 {
     constexpr const char *whitespace { " \t\r\n\v\f" };
     if (targetString.empty()) {
@@ -22,18 +22,18 @@ auto trim(const std::string &targetString) -> std::string
     return targetString.substr(first, (last - first + 1));
 }
 
-struct CommandGet {
+export struct CommandGet {
     std::string key;
 };
 
-struct CommandSet {
+export struct CommandSet {
     std::string key;
     std::string value;
 };
 
-struct CommandUndefined { };
+export struct CommandUndefined { };
 
-auto parseCommand(const std::string &command)
+export auto parseCommand(const std::string &command)
     -> std::variant<CommandGet, CommandSet, CommandUndefined>
 {
     const static std::regex getRegex { R"(get\s+(\w+))" };

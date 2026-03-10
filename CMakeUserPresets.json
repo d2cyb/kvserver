@@ -1,0 +1,107 @@
+{
+  "version": 2,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 14,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "dev-common",
+      "hidden": true,
+      "binaryDir": "${sourceDir}/build/dev",
+      "inherits": [
+        "dev-mode",
+        "cppcheck"
+      ],
+      "cacheVariables": {
+        "BUILD_MCSS_DOCS": "OFF"
+      }
+    },
+    {
+      "name": "dev-linux",
+      "hidden": true,
+      "inherits": [
+        "dev-common",
+        "ci-linux"
+      ],
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+    {
+      "name": "dev-gcc",
+      "inherits": [
+        "dev-linux",
+        "gcc-compiler"
+      ]
+    },
+    {
+      "name": "dev-clang",
+      "inherits": [
+        "dev-linux",
+        "clang-compiler"
+      ]
+    },
+    {
+      "name": "dev-debug",
+      "inherits": [
+        "dev-linux"
+      ],
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "dev-lint",
+      "displayName": "Lint code",
+      "binaryDir": "${sourceDir}/build/lint",
+      "inherits": [
+        "dev-mode",
+        "clang-compiler",
+        "flags-gcc-clang",
+        "clang-tidy"
+      ]
+    },
+    {
+      "name": "coverage-gcc",
+      "displayName": "Code coverage (GCC)",
+      "binaryDir": "${sourceDir}/build/coverage",
+      "inherits": [
+        "dev-mode",
+        "gcc-coverage"
+      ]
+    },
+    {
+      "name": "coverage-clang",
+      "displayName": "Code coverage (Clang)",
+      "binaryDir": "${sourceDir}/build/coverage",
+      "inherits": [
+        "dev-mode",
+        "clang-coverage"
+      ]
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "dev-gcc",
+      "configurePreset": "dev-gcc",
+      "configuration": "Debug",
+      "jobs": 4
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "dev-gcc",
+      "configurePreset": "dev-gcc",
+      "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "jobs": 4,
+        "noTestsAction": "error"
+      }
+    }
+  ]
+}

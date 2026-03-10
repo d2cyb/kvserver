@@ -5,6 +5,7 @@ module;
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <iostream>
 #include <mutex>
 #include <optional>
@@ -47,13 +48,13 @@ private:
     std::jthread saveThread;
 
 public:
-    explicit Config(string configFilePath)
-        : configFilePath(std::move(configFilePath))
+    explicit Config(string configPath)
+        : configFilePath(std::move(configPath))
         , configData {}
         , saveConfigTimeout { std::chrono::milliseconds(STORE_FILE_INTERVAL_MILLISECONDS) }
     {
         loadConfig();
-        saveThread = std::jthread(&Config::saveWorker, this);
+        saveThread = std::jthread(std::bind_front(&Config::saveWorker, this));
     }
 
     ~Config()
