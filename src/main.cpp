@@ -69,7 +69,7 @@ auto main(int argc, char *argv[]) -> int
 
     std::cout << "Started key value server\n"
               << "Server port: " << port << "\n"
-              << "Config file: " << configFilePath << '\n';
+              << "Config file: " << configFilePath << std::endl;
 
     try {
         config    = std::make_shared<Config>(configFilePath);

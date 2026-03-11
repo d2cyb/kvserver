@@ -88,7 +88,7 @@ private:
                     << std::put_time(std::localtime(&timePoint), "%H:%M:%S") << " ===\n"
                     << "Total commands : " << totalCommands.load() << "\n"
                     << "Commands in last " << intervalSeconds
-                    << " seconds: " << recentCommands.load() << '\n';
+                    << " seconds: " << recentCommands.load() << std::endl;
 
                 recentCommands = 0;
             }

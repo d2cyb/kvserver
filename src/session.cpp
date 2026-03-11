@@ -127,12 +127,12 @@ private:
                     // Remote peer closed connection
                 } else {
                     std::osyncstream(std::cerr)
-                        << "Server error: wait for request: " << err.what() << '\n';
+                        << "Server error: wait for request: " << err.what() << std::endl;
                 }
                 break;
             } catch (std::exception &err) {
                 std::osyncstream(std::cerr)
-                    << "Server exception: wait for request: " << err.what() << '\n';
+                    << "Server exception: wait for request: " << err.what() << std::endl;
                 break;
             }
         }

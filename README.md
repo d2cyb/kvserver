@@ -17,52 +17,49 @@
 
 
 ## Зависимости проекта
- * [boost](https://github.com/google/googletest.git) - обработка json и работа с сетью и тесты
+ * [boost](https://github.com/google/googletest.git) - обработка json и работа с сетью
+ * [catch2](https://github.com/catchorg/Catch2) - unit и benchmark тесты
 
 
 ## Сборка проекта
-Создать в корне проекта директорию build, перейти в неё и выполнить следующие команды.
+Для сборки release версии проекта выполнить следующие команды из корня проекта:
 
 ```sh
-cmake ..
-cmake --build . --config Debug --target all
+cmake -S . -B build/release --preset ci-release
+cmake --build build/release --target all --
 ```
 
 ## Запуск программы
 В корне проекта выполнить следующую команду:
 
 ```sh
-./build/bin/kvserver ./config.txt
+./build/release/bin/kvserver 8080 ./config.txt
 ```
-
-Либо, если в директории с исполняемым файлам уже есть config.txt, то можно запустить без параметров.
-
-```sh
-./build/bin/kvserver
-```
+Остановить сервер командой Ctrl+C. После остановки таймера 1-5 секунд, сервер завершит работу.
 
 
 ## Запуск тестов
 
 ### Unit тесты
-Для запуска тестов выполните следующую команду:
+Для запуска модульных тестов, из корня проекта выполните следующую команду:
 
 ```sh
-./build/bin/kvserver_unit
+./build/release/bin/kvserver_unit
 ```
 
 ### Нагрузочные тесты
-Для запуска тестов выполните следующую команду:
+Для запуска benchmark тестов, из корня проекта выполните следующую команду:
 
 ```sh
-./build/bin/kvserver_bench
+./build/release/bin/kvserver_bench
 ```
 
 ### Тесты памяти valgrind
-Для запуска тестов выполните следующую команду:
+Для запуска тестов памяти, из корня проекта выполните следующую команду:
 
 ```sh
-(cd ./build/tests/unit && ctest -T memcheck)
+cmake --build build/release --target sanitize-memory
+
 ```
 
 
@@ -72,7 +69,7 @@ cmake --build . --config Debug --target all
 ./build/bin/kvserver 8080
 ```
 
-Или собрать и запустить сервер в docker-контейере
+Или собрать и запустить сервер в docker-контейнере. Для этого выполнить следующие команды из корня проекта.
 ```sh
 docker build -t kvserver-release --target release .
 docker run --rm -p 8080:8080 -v ./config.txt:/app/config.txt kvserver-release:latest

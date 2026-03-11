@@ -103,7 +103,7 @@ private:
     {
         if (!std::filesystem::exists(configFilePath)) {
             std::osyncstream(std::cerr)
-                << "Config file not found, creating new one: " << configFilePath << '\n';
+                << "Config file not found, creating new one: " << configFilePath << std::endl;
             return;
         }
 
@@ -125,7 +125,7 @@ private:
 
         } catch (const std::exception &e) {
             std::osyncstream(std::cerr)
-                << "Error parsing config file " << configFilePath << ". " << e.what() << '\n';
+                << "Error parsing config file " << configFilePath << ". " << e.what() << std::endl;
         }
     }
 
@@ -162,7 +162,7 @@ private:
             std::ofstream file(configFilePath);
             if (!file.is_open()) {
                 std::osyncstream(std::cerr)
-                    << "Error opening config file for writing. " << configFilePath << '\n';
+                    << "Error opening config file for writing. " << configFilePath << std::endl;
                 return;
             }
 
@@ -172,7 +172,7 @@ private:
             isNeedSave = false;
         } catch (const std::exception &e) {
             std::osyncstream(std::cerr)
-                << "Error saving config to " << configFilePath << ". " << e.what() << '\n';
+                << "Error saving config to " << configFilePath << ". " << e.what() << std::endl;
         }
     }
 };
