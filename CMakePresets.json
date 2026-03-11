@@ -1,0 +1,184 @@
+{
+	"version": 2,
+	"cmakeMinimumRequired": {
+		"major": 3,
+		"minor": 14,
+		"patch": 0
+	},
+	"configurePresets": [
+		{
+			"name": "cmake-pedantic",
+			"hidden": true,
+			"warnings": {
+				"dev": true,
+				"deprecated": true,
+				"uninitialized": true,
+				"unusedCli": true,
+				"systemVars": false
+			},
+			"errors": {
+				"dev": true,
+				"deprecated": true
+			}
+		},
+		{
+			"name": "dev-mode",
+			"hidden": true,
+			"inherits": "cmake-pedantic",
+			"cacheVariables": {
+				"kvserver_DEVELOPER_MODE": "ON"
+			}
+		},
+		{
+			"name": "clang-compiler",
+			"hidden": true,
+			"cacheVariables": {
+				"CMAKE_CXX_COMPILER": "clang++",
+				"CMAKE_C_COMPILER": "clang"
+			}
+		},
+		{
+			"name": "gcc-compiler",
+			"hidden": true,
+			"cacheVariables": {
+				"CMAKE_CXX_COMPILER": "g++",
+				"CMAKE_C_COMPILER": "gcc"
+			}
+		},
+		{
+			"name": "cppcheck",
+			"hidden": true,
+			"cacheVariables": {
+				"CMAKE_CXX_CPPCHECK": "cppcheck;--inline-suppr;--check-level=exhaustive"
+			}
+		},
+		{
+			"name": "ci-std",
+			"description": "This preset makes sure the project actually builds with at least the specified standard",
+			"hidden": true,
+			"cacheVariables": {
+				"CMAKE_CXX_EXTENSIONS": "OFF",
+				"CMAKE_CXX_STANDARD": "20",
+				"CMAKE_CXX_STANDARD_REQUIRED": "ON"
+			}
+		},
+		{
+			"name": "flags-gcc-clang",
+			"description": "These flags are supported by both GCC and Clang",
+			"hidden": true,
+			"cacheVariables": {
+				"CMAKE_CXX_FLAGS": "-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3 -D_GLIBCXX_ASSERTIONS=1 -fstack-protector-strong -fcf-protection=full -fstack-clash-protection -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion -Wcast-qual -Wformat=2 -Wundef -Werror=float-equal -Wshadow -Wcast-align -Wunused -Wnull-dereference -Wdouble-promotion -Wimplicit-fallthrough -Wextra-semi -Woverloaded-virtual -Wnon-virtual-dtor -Wold-style-cast",
+				"CMAKE_EXE_LINKER_FLAGS": "-Wl,--allow-shlib-undefined,--as-needed,-z,noexecstack,-z,relro,-z,now,-z,nodlopen",
+				"CMAKE_SHARED_LINKER_FLAGS": "-Wl,--allow-shlib-undefined,--as-needed,-z,noexecstack,-z,relro,-z,now,-z,nodlopen"
+			}
+		},
+		{
+			"name": "ci-linux",
+			"inherits": [
+				"ci-std"
+			],
+			"generator": "Ninja",
+			"hidden": true,
+			"cacheVariables": {
+				"CMAKE_BUILD_TYPE": "Release"
+			}
+		},
+		{
+			"name": "gcc-coverage",
+			"binaryDir": "${sourceDir}/build/coverage",
+			"inherits": [
+				"ci-linux",
+				"gcc-compiler"
+			],
+			"hidden": true,
+			"cacheVariables": {
+				"ENABLE_COVERAGE": "ON",
+				"BUILD_MCSS_DOCS": "OFF",
+				"CMAKE_BUILD_TYPE": "Coverage",
+				"CMAKE_CXX_FLAGS_COVERAGE": "-Og -g --coverage -fkeep-inline-functions -fkeep-static-functions",
+				"CMAKE_EXE_LINKER_FLAGS_COVERAGE": "--coverage",
+				"CMAKE_SHARED_LINKER_FLAGS_COVERAGE": "--coverage",
+				"CMAKE_MAP_IMPORTED_CONFIG_COVERAGE": "Coverage;RelWithDebInfo;Release;Debug;"
+			}
+		},
+		{
+			"name": "clang-coverage",
+			"binaryDir": "${sourceDir}/build/coverage",
+			"inherits": [
+				"ci-linux",
+				"clang-compiler"
+			],
+			"hidden": true,
+			"cacheVariables": {
+				"ENABLE_COVERAGE": "ON",
+				"BUILD_MCSS_DOCS": "OFF",
+				"CMAKE_BUILD_TYPE": "Coverage",
+				"CMAKE_CXX_FLAGS_COVERAGE": "-Og -g -fprofile-instr-generate -fcoverage-mapping",
+				"CMAKE_EXE_LINKER_FLAGS_COVERAGE": "-fprofile-instr-generate",
+				"CMAKE_SHARED_LINKER_FLAGS_COVERAGE": "-fprofile-instr-generate",
+				"CMAKE_MAP_IMPORTED_CONFIG_COVERAGE": "Coverage;RelWithDebInfo;Release;Debug;"
+			}
+		},
+		{
+			"name": "clang-tidy",
+			"hidden": true,
+			"inherits": [
+				"ci-linux",
+				"cppcheck",
+				"dev-mode",
+				"clang-compiler"
+			],
+			"cacheVariables": {
+				"CMAKE_CXX_CLANG_TIDY": "clang-tidy;--header-filter=^${sourceDir}/"
+			}
+		},
+		{
+			"name": "ci-coverage",
+			"inherits": [
+				"clang-coverage",
+				"dev-mode"
+			],
+			"binaryDir": "${sourceDir}/build/coverage",
+			"cacheVariables": {
+				"COVERAGE_HTML_COMMAND": ""
+			}
+		},
+		{
+			"name": "ci-sanitize",
+			"binaryDir": "${sourceDir}/build/sanitize",
+			"inherits": [
+				"ci-linux",
+				"cppcheck",
+				"dev-mode",
+				"clang-compiler"
+			],
+			"cacheVariables": {
+				"CMAKE_BUILD_TYPE": "Sanitize",
+				"CMAKE_CXX_FLAGS_SANITIZE": "-U_FORTIFY_SOURCE -O2 -g -fsanitize=address,undefined -fno-omit-frame-pointer -fno-common",
+				"CMAKE_MAP_IMPORTED_CONFIG_SANITIZE": "Sanitize;RelWithDebInfo;Release;Debug;"
+			}
+		},
+		{
+			"name": "ci-multi-config",
+			"description": "Speed up multi-config generators by generating only one configuration instead of the defaults",
+			"hidden": true,
+			"cacheVariables": {
+				"CMAKE_CONFIGURATION_TYPES": "Release"
+			}
+		},
+		{
+			"name": "ci-release",
+			"binaryDir": "${sourceDir}/build/release",
+			"inherits": [
+				"clang-compiler",
+				"ci-linux",
+				"cppcheck",
+				"dev-mode"
+			],
+			"cacheVariables": {
+				"BUILD_MCSS_DOCS": "OFF",
+				"PROJECT_IS_TOP_LEVEL": "ON"
+			}
+		}
+	]
+}

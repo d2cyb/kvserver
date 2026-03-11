@@ -1,204 +1,180 @@
 module;
 
 #include <boost/json.hpp>
-#include <condition_variable>
+#include <boost/property_tree/json_parser.hpp>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <iostream>
 #include <mutex>
-#include <queue>
+#include <optional>
 #include <string>
+#include <syncstream>
 #include <thread>
+#include <unordered_map>
 #include <utility>
 
 export module kvserver.config;
 
-export namespace kvserver {
+namespace kvserver {
 
-struct ConfigKeyStats {
-	int reads { 0 };
-	int writes { 0 };
+using std::string;
+
+const uint32_t STORE_FILE_INTERVAL_MILLISECONDS = 5 * 1000;
+
+export struct ConfigData {
+    string value;
+    uint64_t reads { 0 };
+    uint64_t writes { 0 };
+
+    static auto parse(boost::property_tree::ptree const &from) -> ConfigData
+    {
+        return ConfigData { .value  = from.get<string>("value"),
+                            .reads  = from.get<uint64_t>("reads"),
+                            .writes = from.get<uint64_t>("writes") };
+    }
 };
 
-class Config {
+export class Config {
 private:
-	std::string configFilePath;
-	std::unordered_map<std::string, std::string> configData;
-	// TODO (move to different statistics class)
-	std::unordered_map<std::string, ConfigKeyStats> keyStatus;
+    string configFilePath;
 
-	// Replace to different locks: shared_timed_mutex, std::scoped_lock
-	mutable std::mutex dataMutex;
-	mutable std::mutex fileMutex;
-	mutable std::mutex statusMutex;
+    std::unordered_map<string, ConfigData> configData;
+    mutable std::mutex dataMutex;
 
-	const std::chrono::seconds saveConfigTimeout { std::chrono::seconds(5) };
-	bool isNeedSave { false };
-	std::mutex saveMutex;
-
-	std::jthread saveThread;
-	std::condition_variable_any saveCV;
-	std::queue<std::function<void()>> saveQueue;
+    const std::chrono::milliseconds saveConfigTimeout;
+    std::atomic<bool> isNeedSave { false };
+    std::jthread saveThread;
 
 public:
-	explicit Config(std::string configFilePath)
-		: configFilePath(std::move(configFilePath))
-		, configData {}
-		, keyStatus {}
-	{
-		loadConfig();
-		startSaveThread();
-	}
+    explicit Config(string configPath)
+        : configFilePath(std::move(configPath))
+        , configData {}
+        , saveConfigTimeout { std::chrono::milliseconds(STORE_FILE_INTERVAL_MILLISECONDS) }
+    {
+        loadConfig();
+        saveThread = std::jthread(std::bind_front(&Config::saveWorker, this));
+    }
 
-	~Config()
-	{
-		stopSaveThread();
-		if (isNeedSave) {
-			saveConfig();
-		}
-	}
+    ~Config()
+    {
+        saveThread.request_stop();
+        saveConfig();
+    }
 
-	Config(const Config &)					   = delete;
-	auto operator=(const Config &) -> Config & = delete;
-	Config(Config &&)						   = delete;
-	auto operator=(Config &&) -> Config &	   = delete;
+    Config(const Config &)                     = delete;
+    auto operator=(const Config &) -> Config & = delete;
+    Config(Config &&)                          = delete;
+    auto operator=(Config &&) -> Config &      = delete;
 
-	auto get(const std::string &key) -> std::optional<std::string>
-	{
-		std::scoped_lock sl(dataMutex, statusMutex);
-		auto it = configData.find(key);
-		if (it != configData.end()) {
-			keyStatus[key].reads++;
-			return it->second;
-		}
+    auto get(const string &key) -> std::optional<ConfigData>
+    {
+        std::lock_guard<std::mutex> lock(dataMutex);
 
-		return {};
-	}
+        if (auto it = configData.find(key); it != configData.end()) {
+            it->second.reads++;
+            return it->second;
+        }
 
-	void set(const std::string &key, const std::string &value)
-	{
-		{
-			std::scoped_lock sl(dataMutex, statusMutex);
-			configData[key] = value;
-			keyStatus[key].writes++;
-			isNeedSave = true;
-		}
+        return {};
+    }
 
-		saveCV.notify_one();
-	}
+    auto set(const string &key, const string &value) -> ConfigData
+    {
+        std::lock_guard<std::mutex> lock(dataMutex);
+        ConfigData config { .value = value, .reads = 0, .writes = 1 };
 
-	auto getKeyStats(const std::string &key) -> ConfigKeyStats const
-	{
-		std::lock_guard<std::mutex> lock(statusMutex);
+        if (auto it = configData.find(key); it != configData.end()) {
+            it->second.value = value;
+            it->second.writes++;
+            config.reads  = it->second.reads;
+            config.writes = it->second.writes;
+        } else {
+            configData.emplace(key, config);
+        }
 
-		auto it = keyStatus.find(key);
-		if (it != keyStatus.end()) {
-			return it->second;
-		}
-
-		return { .reads = 0, .writes = 0 };
-	}
+        isNeedSave = true;
+        return config;
+    }
 
 private:
-	void loadConfig()
-	{
-		if (!std::filesystem::exists(configFilePath)) {
-			std::cerr << "Config file not found, creating new one: " << configFilePath << '\n';
+    void loadConfig()
+    {
+        if (!std::filesystem::exists(configFilePath)) {
+            std::osyncstream(std::cerr)
+                << "Config file not found, creating new one: " << configFilePath << std::endl;
+            return;
+        }
 
-			saveConfig();
-			return;
-		}
+        try {
+            std::lock_guard<std::mutex> lock(dataMutex);
 
-		try {
-			std::lock_guard<std::mutex> lock(dataMutex);
+            std::ifstream file(configFilePath);
+            boost::property_tree::ptree jsonDocument;
+            boost::property_tree::read_json(file, jsonDocument);
+            file.close();
 
-			std::ifstream file(configFilePath);
-			std::string content(
-				(std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>()
-			);
-			file.close();
+            if (jsonDocument.empty()) {
+                return;
+            }
 
-			if (content.empty()) {
-				return;
-			}
+            for (const auto &pair : jsonDocument) {
+                configData.emplace(pair.first, ConfigData::parse(pair.second));
+            }
 
-			boost::json::value jsonDocument = boost::json::parse(content);
+        } catch (const std::exception &e) {
+            std::osyncstream(std::cerr)
+                << "Error parsing config file " << configFilePath << ". " << e.what() << std::endl;
+        }
+    }
 
-			if (!jsonDocument.is_object()) {
-				std::cerr << "Config file is not a valid JSON object: " << configFilePath << '\n';
-				return;
-			}
+    void saveWorker(const std::stop_token stopToken)
+    {
+        while (not stopToken.stop_requested()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(saveConfigTimeout));
+            saveConfig();
+        }
+    }
 
-			const boost::json::object &jsonKeyValuePairs = jsonDocument.as_object();
-			configData.clear();
+    void saveConfig()
+    {
+        try {
+            boost::json::object jsonObj;
 
-			for (const auto &pair : jsonKeyValuePairs) {
-				if (pair.value().is_string()) {
-					configData[pair.key()] = pair.value().as_string().c_str();
-				}
-			}
-		} catch (const std::exception &e) {
-			std::cerr << "Error parsing config file " << configFilePath << ". " << e.what() << '\n';
-		}
-	}
+            std::lock_guard<std::mutex> lock(dataMutex);
+            if (isNeedSave == false) {
+                return;
+            }
 
-	void saveConfig()
-	{
-		try {
-			boost::json::object jsonObj;
-			std::lock_guard<std::mutex> lock(dataMutex);
+            for (const auto &[key, value] : configData) {
+                jsonObj[key] = boost::json::object { {
+                  { "value", value.value },
+                  { "reads", value.reads },
+                  { "writes", value.writes },
+                } };
+            }
 
-			for (const auto &[key, value] : configData) {
-				jsonObj[key] = value;
-			}
+            boost::json::value jsonDocument = jsonObj;
 
-			boost::json::value jsonDocument = jsonObj;
+            string jsonDocumentStr = boost::json::serialize(jsonDocument);
 
-			std::string jsonDocumentStr = boost::json::serialize(jsonDocument);
+            std::ofstream file(configFilePath);
+            if (!file.is_open()) {
+                std::osyncstream(std::cerr)
+                    << "Error opening config file for writing. " << configFilePath << std::endl;
+                return;
+            }
 
-			std::ofstream file(configFilePath);
-			if (!file.is_open()) {
-				std::cerr << "Error opening config file for writing. " << configFilePath << '\n';
-				return;
-			}
+            file << jsonDocumentStr;
+            file.close();
 
-			file << jsonDocumentStr;
-			file.close();
-
-			isNeedSave = false;
-		} catch (const std::exception &e) {
-			std::cerr << "Error saving config to " << configFilePath << ". " << e.what() << '\n';
-		}
-	}
-
-	void startSaveThread()
-	{
-		saveThread = std::jthread(&Config::saveWorker, this);
-	}
-
-	void stopSaveThread()
-	{
-		saveThread.request_stop();
-	}
-
-	void saveWorker(const std::stop_token &stopToken)
-	{
-		while (true) {
-			std::unique_lock<std::mutex> lock(saveMutex);
-
-			bool ret = saveCV.wait_for(lock, stopToken, saveConfigTimeout, [this]() {
-				return isNeedSave;
-			});
-
-			if (ret) {
-				if (isNeedSave) {
-					saveConfig();
-				}
-			} else {
-				break;
-			}
-		}
-	}
+            isNeedSave = false;
+        } catch (const std::exception &e) {
+            std::osyncstream(std::cerr)
+                << "Error saving config to " << configFilePath << ". " << e.what() << std::endl;
+        }
+    }
 };
 
 } // namespace kvserver

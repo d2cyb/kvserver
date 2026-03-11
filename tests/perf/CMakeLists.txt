@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.28)
+cmake_minimum_required(VERSION 3.31)
 
 project(
     ${PROJECT_NAME}_bench
@@ -10,12 +10,14 @@ message(STATUS "Performing tests enabled")
 set(BENCHMARK_TESTS_PROJECT_NAME ${PROJECT_NAME})
 
 find_package(Catch2 3 REQUIRED)
+find_package(Boost CONFIG)
 find_package(${LIBRARY_NAME} PATHS ${CMAKE_BINARY_DIR})
 
 file(
     GLOB_RECURSE
     UNIT_TEST_FILES
     ${PROJECT_SOURCE_DIR}/src/server.bench.cpp
+    ${PROJECT_SOURCE_DIR}/src/statistic.bench.cpp
 )
 
 add_executable(${BENCHMARK_TESTS_PROJECT_NAME})
@@ -40,6 +42,9 @@ target_include_directories(${BENCHMARK_TESTS_PROJECT_NAME}
 target_link_libraries(${BENCHMARK_TESTS_PROJECT_NAME} PRIVATE
     ${LIBRARY_NAME}
     Catch2::Catch2WithMain
+    boost_thread
+    pthread
+
 )
 
 include(Catch)

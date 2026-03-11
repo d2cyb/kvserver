@@ -6,7 +6,6 @@
 #include <boost/asio/read_until.hpp>
 #include <boost/throw_exception.hpp>
 #include <filesystem>
-#include <future>
 #include <latch>
 #include <memory>
 #include <string>
@@ -16,142 +15,179 @@
 
 import kvserver.server;
 import kvserver.config;
+import kvserver.statistic;
 import kvserver.utilities;
 
 using boost::asio::ip::tcp;
 using kvserver::Config;
 using kvserver::Server;
+using kvserver::Statistic;
+
+using std::string;
 
 const int MAXIMUM_MESSAGE_LENGTH = 1024;
 
-auto sendCommand(const std::string &host, uint16_t port, const std::string &command) -> std::string
+auto sendCommand(const string &host, uint16_t port, const string &command) -> string
 {
-	try {
-		boost::asio::io_context io_context {};
-		tcp::resolver resolver(io_context);
-		tcp::resolver::results_type endpoints = resolver.resolve(host, std::to_string(port));
+    try {
+        boost::asio::streambuf sbuff;
+        boost::asio::io_context io_context{};
+        tcp::resolver resolver(io_context);
+        tcp::resolver::results_type endpoints = resolver.resolve(host, std::to_string(port));
 
-		tcp::socket socket(io_context);
-		boost::asio::connect(socket, endpoints);
+        tcp::socket socket(io_context);
+        boost::asio::connect(socket, endpoints);
 
-		// request
-		boost::asio::write(socket, boost::asio::buffer(command + '\n'));
+        // request
+        boost::asio::write(socket, boost::asio::buffer(command + '\n'));
 
-		// response
-		std::array<char, MAXIMUM_MESSAGE_LENGTH> reply {};
-		size_t replyLength = boost::asio::read(
-			socket, boost::asio::buffer(reply), boost::asio::transfer_at_least(1)
-		);
-		std::string data { reply.data(), replyLength };
+        // response
+        std::array<char, MAXIMUM_MESSAGE_LENGTH> reply {};
+        size_t replyLength = boost::asio::read(
+            socket, boost::asio::buffer(reply), boost::asio::transfer_at_least(1)
+        );
+        string data { reply.data(), replyLength };
 
-		socket.close();
+        socket.close();
 
-		return data;
-	} catch (std::exception &e) {
-		return "ERROR: " + std::string(e.what());
-	}
+        return data;
+    } catch (boost::system::system_error &err) {
+        if (err.code() == boost::asio::error::eof) {
+            return "connection closed";
+        } else {
+            return "ERROR: " + string(err.what());
+        }
+    } catch (std::exception &err) {
+        return "ERROR: " + string(err.what());
+    }
 }
-
-std::shared_ptr<Server> server;
 
 TEST_CASE("server", "[server]")
 {
-	const uint16_t portNum { 8080 };
-	const std::string testFilePath = "server_config.txt";
+    const uint16_t portNum { 8080 };
+    const string testFilePath = "server_config.txt";
+    std::shared_ptr<Server> server;
 
-	SECTION("procession commands")
-	{
-		std::filesystem::remove(testFilePath);
+    std::filesystem::remove(testFilePath);
 
-		std::latch serverReady { 1 };
-		std::jthread serverThread([portNum, &testFilePath, &serverReady]() -> void {
-			auto config = std::make_shared<Config>(testFilePath);
-			config->set("key1", "value 2");
+    std::latch serverReady { 1 };
+    std::jthread serverThread([portNum, &testFilePath, &serverReady, &server]() -> void {
+        auto config = std::make_shared<Config>(testFilePath);
+        config->set("key1", "value 2");
 
-			server = std::make_shared<Server>(portNum, config);
+        auto statistic = std::make_shared<Statistic>();
 
-			auto startServerCallBack = [&serverReady]() -> void { serverReady.count_down(); };
-			server->pushTask(startServerCallBack);
+        server = std::make_shared<Server>(portNum, config, statistic);
 
-			server->start();
-		});
+        auto startServerCallBack = [&serverReady]() -> void { serverReady.count_down(); };
+        server->pushTask(startServerCallBack);
 
-		serverReady.wait();
+        server->start();
+    });
 
-		// should return value on get commands
-		auto resultGet = sendCommand("localhost", portNum, "get key1");
-		REQUIRE(resultGet == "value 2");
+    SECTION("procession commands")
+    {
+        serverReady.wait();
 
-		// should return empty string on set commands
-		auto resultSet = sendCommand("localhost", portNum, "set key2 = test value 2");
-		REQUIRE(resultSet == "(empty)");
+        auto resultGet = sendCommand("localhost", portNum, "get key1");
+        REQUIRE(resultGet == "key1=value 2\nreads=1\nwrites=1");
 
-		// should return empty string on wrong commands
-		auto resultUndefinedCommand = sendCommand("localhost", portNum, "wrong command");
-		REQUIRE(resultUndefinedCommand == "(empty)");
+        auto resultSet = sendCommand("localhost", portNum, "set key2 = test value 2");
+        REQUIRE(resultSet == "key2=test value 2\nreads=0\nwrites=1");
 
-		server->stop();
-	}
+        auto resultUndefinedCommand = sendCommand("localhost", portNum, "wrong command");
+        REQUIRE(resultUndefinedCommand == "(empty)");
 
-	std::filesystem::remove(testFilePath);
+        server->stop();
+    }
+
+    SECTION("must receive message less 4049 chars")
+    {
+        serverReady.wait();
+
+        const int MAX_MESSAGE_SIZE { 4095 };
+        string tooLargeMessage(MAX_MESSAGE_SIZE, 'A');
+        auto resultGet = sendCommand("localhost", portNum, tooLargeMessage);
+
+        REQUIRE(resultGet == "(empty)");
+
+        server->stop();
+    }
+
+    SECTION("must close connection if message too large")
+    {
+        serverReady.wait();
+
+        const int TOO_LARGE_MESSAGE_SIZE { 4096 };
+        string tooLargeMessage(TOO_LARGE_MESSAGE_SIZE, 'A');
+        auto resultGet = sendCommand("localhost", portNum, tooLargeMessage);
+
+        REQUIRE(resultGet == "connection closed");
+
+        server->stop();
+    }
+
+    std::filesystem::remove(testFilePath);
 }
 
 TEST_CASE("server parallel", "[server]")
 {
-	const uint16_t portNum { 8080 };
-	const std::string testFilePath = "parallel_server_config.txt";
+    const uint16_t portNum { 8080 };
+    const string testFilePath = "parallel_server_config.txt";
+    std::shared_ptr<Server> server;
 
-	SECTION("procession commands")
-	{
-		std::filesystem::remove(testFilePath);
+    std::filesystem::remove(testFilePath);
 
-		std::latch serverReady { 1 };
-		std::jthread serverThread([portNum, &testFilePath, &serverReady]() -> void {
-			auto config = std::make_shared<Config>(testFilePath);
-			config->set("key1", "value 2");
+    std::latch serverReady { 1 };
+    std::jthread serverThread([portNum, &testFilePath, &serverReady, &server]() -> void {
+        auto config = std::make_shared<Config>(testFilePath);
+        config->set("key1", "value 2");
 
-			server = std::make_shared<Server>(portNum, config);
+        auto statistic = std::make_shared<Statistic>();
+        server         = std::make_shared<Server>(portNum, config, statistic);
 
-			auto startServerCallBack = [&serverReady]() -> void { serverReady.count_down(); };
-			server->pushTask(startServerCallBack);
+        auto startServerCallBack = [&serverReady]() -> void { serverReady.count_down(); };
+        server->pushTask(startServerCallBack);
 
-			server->start();
-		});
+        server->start();
+    });
 
-		serverReady.wait();
+    SECTION("procession commands")
+    {
+        serverReady.wait();
 
-		int requestCount { 3 };
-		std::latch allRequestsDone(requestCount);
+        int requestCount { 3 };
+        std::latch allRequestsDone(requestCount);
 
-		auto getKeyFuture				= std::async([portNum, &allRequestsDone]() -> std::string {
-			  auto response = sendCommand("localhost", portNum, "get key1");
-			  allRequestsDone.count_down();
-			  return response;
-		  });
-		auto setAndGetValueFuture		= std::async([portNum, &allRequestsDone]() -> std::string {
-			  sendCommand("localhost", portNum, "set key2 = test value 2");
-			  auto response = sendCommand("localhost", portNum, "get key2");
-			  allRequestsDone.count_down();
-			  return response;
-		  });
-		auto sendUndefinedCommandFuture = std::async([portNum, &allRequestsDone]() -> std::string {
-			auto response = sendCommand("localhost", portNum, "wrong command");
-			allRequestsDone.count_down();
-			return response;
-		});
+        auto getKeyFuture               = std::async([&allRequestsDone]() -> string {
+            auto response = sendCommand("localhost", portNum, "get key1");
+            allRequestsDone.count_down();
+            return response;
+        });
+        auto setAndGetValueFuture       = std::async([&allRequestsDone]() -> string {
+            sendCommand("localhost", portNum, "set key2 = test value 2");
+            auto response = sendCommand("localhost", portNum, "get key2");
+            allRequestsDone.count_down();
+            return response;
+        });
+        auto sendUndefinedCommandFuture = std::async([&allRequestsDone]() -> string {
+            auto response = sendCommand("localhost", portNum, "wrong command");
+            allRequestsDone.count_down();
+            return response;
+        });
 
-		std::string getKeyResponse			 = getKeyFuture.get();
-		std::string setAndGetValueResponse	 = setAndGetValueFuture.get();
-		std::string undefinedCommandResponse = sendUndefinedCommandFuture.get();
+        string getKeyResponse           = getKeyFuture.get();
+        string setAndGetValueResponse   = setAndGetValueFuture.get();
+        string undefinedCommandResponse = sendUndefinedCommandFuture.get();
 
-		allRequestsDone.wait();
+        allRequestsDone.wait();
 
-		REQUIRE(getKeyResponse == "value 2");
-		REQUIRE(setAndGetValueResponse == "test value 2");
-		REQUIRE(undefinedCommandResponse == "(empty)");
+        REQUIRE(getKeyResponse == "key1=value 2\nreads=1\nwrites=1");
+        REQUIRE(setAndGetValueResponse == "key2=test value 2\nreads=1\nwrites=1");
+        REQUIRE(undefinedCommandResponse == "(empty)");
 
-		server->stop();
-	}
+        server->stop();
+    }
 
-	std::filesystem::remove(testFilePath);
+    std::filesystem::remove(testFilePath);
 }
