@@ -46,7 +46,7 @@
     {
       "name": "dev-debug",
       "inherits": [
-        "dev-linux"
+        "dev-clang"
       ],
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug"
