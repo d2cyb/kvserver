@@ -1,5 +1,6 @@
 module;
 
+#include <atomic>
 #include <boost/json.hpp>
 #include <boost/property_tree/json_parser.hpp>
 #include <chrono>
@@ -7,8 +8,8 @@ module;
 #include <fstream>
 #include <functional>
 #include <iostream>
-#include <mutex>
 #include <optional>
+#include <shared_mutex>
 #include <string>
 #include <syncstream>
 #include <thread>
@@ -19,6 +20,7 @@ export module kvserver.config;
 
 namespace kvserver {
 
+using std::atomic;
 using std::string;
 
 const uint32_t STORE_FILE_INTERVAL_MILLISECONDS = 5 * 1000;
@@ -27,6 +29,12 @@ export struct ConfigData {
     string value;
     uint64_t reads { 0 };
     uint64_t writes { 0 };
+};
+
+struct ConfigDataAtomic {
+    string value;
+    atomic<uint64_t> reads { 0 };
+    atomic<uint64_t> writes { 0 };
 
     static auto parse(boost::property_tree::ptree const &from) -> ConfigData
     {
@@ -40,8 +48,8 @@ export class Config {
 private:
     string configFilePath;
 
-    std::unordered_map<string, ConfigData> configData;
-    mutable std::mutex dataMutex;
+    std::unordered_map<string, ConfigDataAtomic> configData;
+    mutable std::shared_timed_mutex dataMutex;
 
     const std::chrono::milliseconds saveConfigTimeout;
     std::atomic<bool> isNeedSave { false };
@@ -70,11 +78,13 @@ public:
 
     auto get(const string &key) -> std::optional<ConfigData>
     {
-        std::lock_guard<std::mutex> lock(dataMutex);
+        std::shared_lock<std::shared_timed_mutex> recentCommandReaderLock(dataMutex);
 
         if (auto it = configData.find(key); it != configData.end()) {
             it->second.reads++;
-            return it->second;
+            return ConfigData { .value  = it->second.value,
+                                .reads  = it->second.reads,
+                                .writes = it->second.writes };
         }
 
         return {};
@@ -82,7 +92,7 @@ public:
 
     auto set(const string &key, const string &value) -> ConfigData
     {
-        std::lock_guard<std::mutex> lock(dataMutex);
+        std::scoped_lock<std::shared_timed_mutex> recentCommandWriterLock(dataMutex);
         ConfigData config { .value = value, .reads = 0, .writes = 1 };
 
         if (auto it = configData.find(key); it != configData.end()) {
@@ -91,7 +101,9 @@ public:
             config.reads  = it->second.reads;
             config.writes = it->second.writes;
         } else {
-            configData.emplace(key, config);
+            configData[key].value  = config.value;
+            configData[key].reads  = config.reads;
+            configData[key].writes = config.writes;
         }
 
         isNeedSave = true;
@@ -108,7 +120,7 @@ private:
         }
 
         try {
-            std::lock_guard<std::mutex> lock(dataMutex);
+            std::scoped_lock<std::shared_timed_mutex> recentCommandWriterLock(dataMutex);
 
             std::ifstream file(configFilePath);
             boost::property_tree::ptree jsonDocument;
@@ -120,7 +132,10 @@ private:
             }
 
             for (const auto &pair : jsonDocument) {
-                configData.emplace(pair.first, ConfigData::parse(pair.second));
+                auto parsedValue              = ConfigDataAtomic::parse(pair.second);
+                configData[pair.first].value  = parsedValue.value;
+                configData[pair.first].reads  = parsedValue.reads;
+                configData[pair.first].writes = parsedValue.writes;
             }
 
         } catch (const std::exception &e) {
@@ -142,7 +157,7 @@ private:
         try {
             boost::json::object jsonObj;
 
-            std::lock_guard<std::mutex> lock(dataMutex);
+            std::scoped_lock<std::shared_timed_mutex> recentCommandWriterLock(dataMutex);
             if (isNeedSave == false) {
                 return;
             }
